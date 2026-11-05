@@ -26,7 +26,7 @@ spec = importlib.util.spec_from_file_location("agenda_guardian", PLUGIN / "__ini
 module = importlib.util.module_from_spec(spec)
 sys.modules["agenda_guardian"] = module
 spec.loader.exec_module(module)
-text = module.scheduled_text({what!r})
+text = module.scheduled_text({what!r}, {data!r}, {home!r})
 if text:
     print(text)
 '''
@@ -267,7 +267,8 @@ class Guardian:
         existing = self._jobs()
         for name, (what, expr) in specs.items():
             script = scripts / f"{name}.py"
-            script.write_text(SCRIPT_TEMPLATE.format(plugin=str(self.plugin_dir), what=what), encoding="utf-8")
+            script.write_text(SCRIPT_TEMPLATE.format(plugin=str(self.plugin_dir), what=what,
+                                                           data=str(self.db_path.parent), home=str(self.home)), encoding="utf-8")
             args = {"schedule": expr, "script": script.name, "no_agent": True, "name": name}
             if deliver:
                 args["deliver"] = deliver
@@ -288,6 +289,8 @@ class Guardian:
         jobs = self._jobs()
         for job_id in jobs.values():
             self._cron({"action": "remove", "job_id": job_id})
+        for name in (JOB_BRIEF, JOB_NUDGE):
+            (self.home / "scripts" / f"{name}.py").unlink(missing_ok=True)
         return f"Removed {len(jobs)} scheduled job(s)." if jobs else "Nothing was scheduled."
 
     def schedule_status(self) -> str:

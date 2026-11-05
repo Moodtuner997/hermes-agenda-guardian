@@ -39,8 +39,12 @@ def _cron(args: dict) -> dict:
         return {"error": f"unreadable answer from cronjob_manage: {str(reply)[:200]}"}
 
 
-def _guardian(*, with_cron: bool = True) -> Guardian:
-    """Built per call: the active profile (and so the data folder) can change between calls."""
+def _guardian(*, with_cron: bool = True, data_dir: str = "", home: str = "") -> Guardian:
+    """Built per call: the active profile (and so the data folder) can change between calls. The cron scripts
+    pass the folders they were written for, so they never depend on the scheduler's environment."""
+    if data_dir:
+        return Guardian(Path(data_dir) / "guardian.db", Path(home) if home else _home(),
+                        plugin_dir=Path(__file__).resolve().parent)
     try:
         from plugins.plugin_storage import plugin_data_dir
 
@@ -52,9 +56,9 @@ def _guardian(*, with_cron: bool = True) -> Guardian:
                     plugin_dir=Path(__file__).resolve().parent)
 
 
-def scheduled_text(what: str) -> str:
+def scheduled_text(what: str, data_dir: str = "", home: str = "") -> str:
     """Entry point of the two cron scripts: the morning brief, or the reminder check ("" = say nothing)."""
-    guardian = _guardian(with_cron=False)
+    guardian = _guardian(with_cron=False, data_dir=data_dir, home=home)
     return guardian.brief_text() if what == "brief" else guardian.nudge_text()
 
 

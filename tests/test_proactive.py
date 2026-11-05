@@ -86,7 +86,8 @@ def test_cron_on_creates_two_script_jobs_without_a_model(make_guardian, tmp_path
     assert creates[0]["schedule"] == "30 7 * * 1,2,3,4,5"
     assert creates[1]["schedule"] == "*/5 8-20 * * 1,2,3,4,5"
     brief_script = (tmp_path / "scripts" / "agenda-guardian-brief.py").read_text(encoding="utf-8")
-    assert "scheduled_text('brief')" in brief_script and repr(str(ROOT)) in brief_script
+    assert "scheduled_text('brief'" in brief_script and repr(str(ROOT)) in brief_script
+    assert repr(str(tmp_path)) in brief_script          # the data folder and home are baked in, not guessed at run time
 
 
 def test_cron_on_updates_instead_of_duplicating(make_guardian):
@@ -112,6 +113,26 @@ def test_hermes_refusing_a_job_is_reported(make_guardian):
 
     out = commands.run(make_guardian(cron=refusing, plugin_dir=ROOT), "cron on")
     assert out.startswith("! Hermes refused") and "not allowed" in out
+
+
+def test_cron_off_also_removes_the_scripts_it_wrote(make_guardian, tmp_path):
+    cron = FakeCron()
+    g = make_guardian(cron=cron, plugin_dir=ROOT)
+    commands.run(g, "cron on")
+    assert sorted(p.name for p in (tmp_path / "scripts").iterdir()) == ["agenda-guardian-brief.py", "agenda-guardian-nudge.py"]
+    commands.run(g, "cron off")
+    assert list((tmp_path / "scripts").iterdir()) == []
+
+
+def test_the_script_does_not_need_hermes_home_in_its_environment(make_guardian, tmp_path):
+    g = make_guardian(cron=FakeCron(), plugin_dir=ROOT)
+    commands.run(g, 'add "Write the quote" 45m')
+    commands.run(g, "cron on")
+    env = {k: v for k, v in os.environ.items() if k != "HERMES_HOME"}
+    done = subprocess.run([sys.executable, str(tmp_path / "scripts" / "agenda-guardian-brief.py")],
+                          capture_output=True, text=True, env=env)
+    assert done.returncode == 0, done.stderr
+    assert "Write the quote" in done.stdout or "Not a workday" in done.stdout   # read this DB, not an empty one
 
 
 def test_cron_without_a_session_explains_itself(make_guardian):

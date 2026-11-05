@@ -164,7 +164,7 @@ to ask you, never to invent your answers.
 ## Development
 
 ```
-python -m pytest tests -q                  # 56 tests, no Hermes needed
+python -m pytest tests -q                  # 57 tests, no Hermes needed
 hermes plugins validate .
 HERMES_HOME=<home> <hermes python> tests/e2e_hermes.py     # real tool calls, real cron, no model
 python tests/make_demo_profile.py --home <home>             # an invented day for screenshots

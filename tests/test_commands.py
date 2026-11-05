@@ -43,6 +43,15 @@ def test_settings_validate_and_remember_where_they_came_from(profile):
             prof.apply_setting(profile, key, value, today)
 
 
+def test_a_local_calendar_path_is_stored_absolute(profile, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "cal.json").write_text("[]", encoding="utf-8")
+    prof.apply_setting(profile, "calendar", "file:cal.json", MONDAY)
+    assert profile["calendar"]["path"] == str((tmp_path / "cal.json").resolve())
+    prof.apply_setting(profile, "calendar", "ics:https://example.com/a.ics", MONDAY)
+    assert profile["calendar"]["path"] == "https://example.com/a.ics"
+
+
 def test_full_session_from_onboarding_to_calibrated_plan(make_guardian, tmp_path):
     g = make_guardian()
     cal = write_calendar(tmp_path, [{"summary": "Client call", "start": "2026-11-09T10:30:00",

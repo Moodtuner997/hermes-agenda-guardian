@@ -8,6 +8,7 @@ import os
 import re
 import shlex
 from datetime import date
+from pathlib import Path
 
 DEFAULTS: dict = {
     "language": "en",
@@ -96,6 +97,9 @@ def _calendar(text: str) -> dict:
         return {"type": "google"}
     kind, _, rest = text.partition(":")
     if kind in ("ics", "file") and rest:
+        if not rest.startswith(("http://", "https://")):
+            # A cron script or the gateway does not run in the folder the rule was typed in.
+            rest = str(Path(rest).expanduser().resolve())
         return {"type": kind, "path": rest}
     if kind == "cmd" and rest:
         argv = [a[1:-1] if len(a) > 1 and a[0] == a[-1] and a[0] in "\"'" else a

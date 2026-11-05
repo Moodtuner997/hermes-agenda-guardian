@@ -11,11 +11,11 @@ très structuré pour son TDAH, assistant proactif façon Instinct, sans suppose
 - Tout texte affiché reste explicable : un bloc dit d'où il vient (estimation, facteur de calibrage, échéance,
   règle) ; une règle non posée par l'utilisateur est marquée « default ».
 - Un calendrier illisible ou absent donne un avertissement visible, jamais un jour vide silencieux.
-- Chaque modification passe `python -m pytest tests -q` (53 tests), `hermes plugins validate .`, puis, si le cron ou
+- Chaque modification passe `python -m pytest tests -q` (56 tests), `hermes plugins validate .`, puis, si le cron ou
   le tableau de bord bougent, `tests/e2e_hermes.py` avec l'interpréteur de Hermes.
 - README, PR et textes publics en anglais ; commits en français, format conventionnel.
 - Jamais de données réelles dans le dépôt : la démo vient de `tests/make_demo_profile.py` (noms inventés).
-- `platforms:` du catalogue = ce qui est réellement testé (Windows 11 ; macOS non testé).
+- `platforms:` du catalogue = ce qui est réellement testé (Windows 11 et Linux arm64 sur l'A1 ; macOS non testé).
 
 ## Pièges
 - Le dossier du dépôt n'est pas importable (tiret) : les tests chargent le paquet sous `agenda_guardian` ; les scripts
@@ -31,5 +31,7 @@ très structuré pour son TDAH, assistant proactif façon Instinct, sans suppose
 - L'interpréteur de Hermes sous Windows (test) : `%LOCALAPPDATA%\hermes-hackathon\installs\…\venv\Scripts\python.exe`
   avec `HERMES_HOME=%LOCALAPPDATA%\hermes-hackathon`, `HERMES_INTERACTIVE=1` et `PYTHONPATH=…\hermes-agent` ;
   le serveur du tableau de bord de test s'arrête avec `hermes dashboard --stop`.
+- Linux : dossier de test isolé `/home/hermes/hk-test` de l'A1 (venv `pt` pour pytest, annulation : la ligne `rm -rf /home/hermes/hk-test` de `~/infra-undo.md`) ; un `hermes` lancé depuis ce shell
+  doit être `env -u ANTHROPIC_BASE_URL` et sans passerelle de test restée vivante, sinon le fournisseur d'abonnement refuse.
 - Non prouvé : compte Google réel (la source `google` est testée sur le format de sortie du script et un processus
   simulé), livraison Telegram/WhatsApp, macOS.

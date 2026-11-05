@@ -144,8 +144,11 @@ to ask you, never to invent your answers.
 
 ## Limits
 
-- Tested on Hermes 0.22.7, Windows 11 (CLI, slash command and tools, dashboard tab, cron creation and script
-  run through Hermes' own runner). macOS is untested.
+- Tested on Hermes 0.22.7 on Windows 11 and on Linux (arm64, Python 3.12): unit tests, `hermes plugins validate`
+  and an end-to-end run with real tool calls, real cron creation and Hermes' own script runner. On Windows, one
+  real agent turn (Claude subscription provider) turned the schedule on through `day_schedule` and Hermes listed
+  the two script-only jobs; the slash command, the CLI and the dashboard tab were exercised there too.
+  macOS is untested.
 - Delivery of the brief and reminders to a messaging platform (Telegram, WhatsApp...) rides on Hermes' own cron
   `deliver` and is not tested here: the end-to-end run creates the jobs and runs their scripts with Hermes' script
   runner, with the default local target.
@@ -159,7 +162,7 @@ to ask you, never to invent your answers.
 ## Development
 
 ```
-python -m pytest tests -q                  # 53 tests, no Hermes needed
+python -m pytest tests -q                  # 56 tests, no Hermes needed
 hermes plugins validate .
 HERMES_HOME=<home> <hermes python> tests/e2e_hermes.py     # real tool calls, real cron, no model
 python tests/make_demo_profile.py --home <home>             # an invented day for screenshots

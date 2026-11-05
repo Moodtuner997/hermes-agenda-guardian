@@ -24,8 +24,8 @@ très structuré pour son TDAH, assistant proactif façon Instinct, sans suppose
   le hook refuse `git add -A`).
 - `cronjob_manage list` renvoie `job_id`, pas `id` (constaté sur Hermes 0.22.7) ; `no_agent` + `script` : la sortie vide
   n'envoie rien, c'est ce qui rend le rappel silencieux.
-- Un script de cron doit vivre sous `HERMES_HOME/scripts/` ; `HERMES_HOME` y est transmis, donc `_home()` retombe
-  sur la variable d'environnement (le module `hermes_constants` n'est pas importable dans le sous-processus).
+- Un script de cron doit vivre sous `HERMES_HOME/scripts/` ; il porte en dur le dossier du plugin, le dossier de données
+  et le home (`SCRIPT_TEMPLATE`), car le sous-processus du planificateur ne garantit ni `HERMES_HOME` ni `hermes_constants`.
 - Un plan « à partir de maintenant » est mémorisé (table `plan_cache`) : les rappels suivent le plan mémorisé, sinon un
   replanning ferait annoncer deux fois un bloc. Les vues du tableau de bord ne mémorisent rien (`remember=False`).
 - L'interpréteur de Hermes sous Windows (test) : `%LOCALAPPDATA%\hermes-hackathon\installs\…\venv\Scripts\python.exe`

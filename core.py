@@ -241,7 +241,8 @@ class Guardian:
     def _jobs(self) -> dict[str, str]:
         listed = self._cron({"action": "list"})
         jobs = listed.get("jobs", []) if isinstance(listed, dict) else listed
-        return {j["name"]: j["id"] for j in jobs if isinstance(j, dict) and j.get("name") in (JOB_BRIEF, JOB_NUDGE)}
+        return {j["name"]: j.get("job_id") or j.get("id") for j in jobs
+                if isinstance(j, dict) and j.get("name") in (JOB_BRIEF, JOB_NUDGE) and (j.get("job_id") or j.get("id"))}
 
     def schedule(self, at_time: str = "", deliver: str = "") -> str:
         if self._cron is None:

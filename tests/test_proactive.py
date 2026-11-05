@@ -90,8 +90,8 @@ def test_cron_on_creates_two_script_jobs_without_a_model(make_guardian, tmp_path
 
 
 def test_cron_on_updates_instead_of_duplicating(make_guardian):
-    cron = FakeCron([{"id": "a1", "name": "agenda-guardian-brief"}, {"id": "b2", "name": "agenda-guardian-nudge"},
-                     {"id": "c3", "name": "unrelated"}])
+    cron = FakeCron([{"job_id": "a1", "name": "agenda-guardian-brief"}, {"job_id": "b2", "name": "agenda-guardian-nudge"},
+                     {"job_id": "c3", "name": "unrelated"}])
     g = make_guardian(cron=cron, plugin_dir=ROOT)
     commands.run(g, "cron on")
     assert [c["action"] for c in cron.calls] == ["list", "update", "update"]
@@ -99,7 +99,7 @@ def test_cron_on_updates_instead_of_duplicating(make_guardian):
 
 
 def test_cron_off_removes_only_its_own_jobs(make_guardian):
-    cron = FakeCron([{"id": "a1", "name": "agenda-guardian-brief"}, {"id": "c3", "name": "unrelated"}])
+    cron = FakeCron([{"job_id": "a1", "name": "agenda-guardian-brief"}, {"job_id": "c3", "name": "unrelated"}])
     g = make_guardian(cron=cron, plugin_dir=ROOT)
     assert commands.run(g, "cron off") == "Removed 1 scheduled job(s)."
     assert [c for c in cron.calls if c["action"] == "remove"] == [{"action": "remove", "job_id": "a1"}]

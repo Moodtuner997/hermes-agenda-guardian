@@ -1,8 +1,8 @@
 # CLAUDE.md (agenda-guardian)
 
 Plugin Hermes Agent (troisième plugin de la candidature au hackathon, date limite 11/11/2026 13 h PST = 22 h Paris).
-Reprise du chantier : `.work/HANDOFF-hackathon-hermes.md` à la racine du parc. Né de la douleur de Théo : agenda
-très structuré pour son TDAH, assistant proactif façon Instinct, sans supposer un second cerveau.
+Né d'un besoin réel : un agenda très structuré pour un TDAH, un assistant proactif, sans supposer un second cerveau
+ni un agenda particulier.
 
 ## Règles
 - Déterministe : aucun appel de modèle, nulle part (planificateur, brief, rappels). Les deux crons sont `no_agent`.
@@ -15,12 +15,12 @@ très structuré pour son TDAH, assistant proactif façon Instinct, sans suppose
   le tableau de bord bougent, `tests/e2e_hermes.py` avec l'interpréteur de Hermes.
 - README, PR et textes publics en anglais ; commits en français, format conventionnel.
 - Jamais de données réelles dans le dépôt : la démo vient de `tests/make_demo_profile.py` (noms inventés).
-- `platforms:` du catalogue = ce qui est réellement testé (Windows 11 et Linux arm64 sur l'A1 ; macOS non testé).
+- `platforms:` du catalogue = ce qui est réellement testé (Windows 11 et Linux arm64 ; macOS non testé).
 
 ## Pièges
 - Le dossier du dépôt n'est pas importable (tiret) : les tests chargent le paquet sous `agenda_guardian` ; les scripts
   de cron et `dashboard/plugin_api.py` font de même (`importlib`, `submodule_search_locations`).
-- `.gitignore_global` de Théo ignore `dist/` : `dashboard/dist/` s'ajoute avec `git add -f` (fichier par fichier,
+- Un gitignore global qui ignore `dist/` est fréquent : `dashboard/dist/` s'ajoute avec `git add -f` (fichier par fichier,
   le hook refuse `git add -A`).
 - `cronjob_manage list` renvoie `job_id`, pas `id` (constaté sur Hermes 0.22.7) ; `no_agent` + `script` : la sortie vide
   n'envoie rien, c'est ce qui rend le rappel silencieux.
@@ -31,7 +31,7 @@ très structuré pour son TDAH, assistant proactif façon Instinct, sans suppose
 - L'interpréteur de Hermes sous Windows (test) : `%LOCALAPPDATA%\hermes-hackathon\installs\…\venv\Scripts\python.exe`
   avec `HERMES_HOME=%LOCALAPPDATA%\hermes-hackathon`, `HERMES_INTERACTIVE=1` et `PYTHONPATH=…\hermes-agent` ;
   le serveur du tableau de bord de test s'arrête avec `hermes dashboard --stop`.
-- Linux : dossier de test isolé `/home/hermes/hk-test` de l'A1 (venv `pt` pour pytest, annulation : la ligne `rm -rf /home/hermes/hk-test` de `~/infra-undo.md`) ; un `hermes` lancé depuis ce shell
-  doit être `env -u ANTHROPIC_BASE_URL` et sans passerelle de test restée vivante, sinon le fournisseur d'abonnement refuse.
+- Linux : testé dans un dossier `HERMES_HOME` isolé sur une machine arm64 (venv séparé pour pytest). Avec le fournisseur
+  d'abonnement Claude, lancer `hermes` avec `env -u ANTHROPIC_BASE_URL` et sans passerelle de test restée vivante, sinon il refuse.
 - Non prouvé : compte Google réel (la source `google` est testée sur le format de sortie du script et un processus
   simulé), livraison Telegram/WhatsApp, macOS.

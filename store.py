@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import statistics
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from .model import Task
@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS tasks (
 CREATE TABLE IF NOT EXISTS samples (
   id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER, category TEXT NOT NULL,
   est_min INTEGER NOT NULL, actual_min INTEGER NOT NULL, logged_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS plan_cache (day TEXT PRIMARY KEY, json TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS notified (key TEXT PRIMARY KEY, at TEXT NOT NULL);
 """
 
 
@@ -112,3 +114,26 @@ def factors(conn) -> dict[str, tuple[float, int]]:
             low, high = FACTOR_RANGE
             result[category] = (round(min(high, max(low, statistics.median(values))), 2), len(values))
     return result
+
+
+def save_plan(conn, day: str, payload: str) -> None:
+    """The plan a day's reminders follow: one row per day, rows older than two weeks are dropped."""
+    conn.execute("INSERT INTO plan_cache(day, json) VALUES(?, ?) ON CONFLICT(day) DO UPDATE SET json=excluded.json",
+                 (day, payload))
+    conn.execute("DELETE FROM plan_cache WHERE day < date(?, '-14 days')", (day,))
+    conn.commit()
+
+
+def load_plan(conn, day: str) -> str | None:
+    row = conn.execute("SELECT json FROM plan_cache WHERE day=?", (day,)).fetchone()
+    return row[0] if row else None
+
+
+def was_notified(conn, key: str) -> bool:
+    return conn.execute("SELECT 1 FROM notified WHERE key=?", (key,)).fetchone() is not None
+
+
+def mark_notified(conn, key: str, now: datetime) -> None:
+    conn.execute("INSERT OR IGNORE INTO notified(key, at) VALUES(?, ?)", (key, now.isoformat()))
+    conn.execute("DELETE FROM notified WHERE at < ?", ((now - timedelta(days=14)).isoformat(),))
+    conn.commit()

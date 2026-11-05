@@ -22,6 +22,9 @@ T = {
         "now_next": "Next: {name} at {start}",
         "now_none": "Nothing left in today's plan.",
         "allday": "all day",
+        "nudge_start": "Starting {time}: {name} ({minutes} min{part})",
+        "nudge_end": "{name} was planned until {end}. How long did it really take? Reply with the minutes "
+                     "(/day done {id} <minutes>): that is how the plan learns your pace.",
     },
     "fr": {
         "title": "Plan du {day}",
@@ -38,6 +41,9 @@ T = {
         "now_next": "Ensuite : {name} à {start}",
         "now_none": "Plus rien dans le plan d'aujourd'hui.",
         "allday": "toute la journée",
+        "nudge_start": "Début à {time} : {name} ({minutes} min{part})",
+        "nudge_end": "{name} était prévu jusqu'à {end}. Combien de temps ça a vraiment pris ? Réponds avec les "
+                     "minutes (/day done {id} <minutes>) : c'est comme ça que le plan apprend ton rythme.",
     },
 }
 

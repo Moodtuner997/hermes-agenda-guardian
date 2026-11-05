@@ -3,6 +3,7 @@ the CLI command and the model tools alike."""
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import urllib.request
@@ -11,7 +12,24 @@ from pathlib import Path
 from typing import Callable
 
 from . import brief, planner, profile as prof, sources, store
-from .model import Plan, Task
+from .model import Block, Plan, Task
+
+JOB_BRIEF, JOB_NUDGE = "agenda-guardian-brief", "agenda-guardian-nudge"
+SCRIPT_TEMPLATE = '''"""Written by the agenda-guardian plugin (/day cron on). It only prints text for the cron job to deliver."""
+import importlib.util
+import sys
+from pathlib import Path
+
+PLUGIN = Path({plugin!r})
+spec = importlib.util.spec_from_file_location("agenda_guardian", PLUGIN / "__init__.py",
+                                              submodule_search_locations=[str(PLUGIN)])
+module = importlib.util.module_from_spec(spec)
+sys.modules["agenda_guardian"] = module
+spec.loader.exec_module(module)
+text = module.scheduled_text({what!r})
+if text:
+    print(text)
+'''
 
 _WEEKDAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
 
@@ -46,9 +64,11 @@ def parse_day(text: str, today: date) -> date:
 
 class Guardian:
     def __init__(self, db_path: Path, home: Path, now: Callable[[], datetime] | None = None,
-                 run=subprocess.run, urlopen=urllib.request.urlopen):
+                 run=subprocess.run, urlopen=urllib.request.urlopen,
+                 cron: Callable[[dict], dict] | None = None, plugin_dir: Path | None = None):
         self.db_path, self.home = db_path, home
         self._now, self._run, self._urlopen = now or datetime.now, run, urlopen
+        self._cron, self.plugin_dir = cron, plugin_dir or Path(__file__).resolve().parent
         self._conn = None
 
     @property
@@ -176,7 +196,102 @@ class Guardian:
             warnings.append(f"Calendar unreadable ({exc}): the plan ignores your meetings.")
         plan = planner.plan_day(day, events, store.tasks(self.conn), profile, store.factors(self.conn),
                                 now if from_now else None, warnings)
+        self._remember(plan)
         return plan, profile
+
+    def _remember(self, plan: Plan) -> None:
+        """Keep the plan reminders follow: a later replan must not move a block the user already saw."""
+        blocks = [{"task_id": b.task_id, "name": b.name, "part": b.part, "parts": b.parts, "focus": b.focus,
+                   "start": b.start.isoformat(), "end": b.end.isoformat()} for b in plan.blocks]
+        store.save_plan(self.conn, plan.day.isoformat(), json.dumps(blocks))
+
+    def _remembered(self, day: date) -> list[Block] | None:
+        raw = store.load_plan(self.conn, day.isoformat())
+        if raw is None:
+            return None
+        return [Block(datetime.fromisoformat(b["start"]), datetime.fromisoformat(b["end"]), b["task_id"], b["name"],
+                      b["part"], b["parts"], b["focus"]) for b in json.loads(raw)]
+
+    # --- reminders (run by the nudge cron job, no model call) --------------------------------------------
+    def nudge_text(self) -> str:
+        """What to say right now, or "" (an empty answer sends nothing). Each reminder is sent once:
+        a block about to start, and, after a task's last block, the question that feeds the calibration."""
+        now, lines = self.now(), []
+        day = now.date()
+        blocks = self._remembered(day)
+        if blocks is None:
+            blocks = self.make_plan(day, from_now=True)[0].blocks
+        t = brief.T.get(self.profile()["language"], brief.T["en"])
+        open_ids = {task.id for task in store.tasks(self.conn)}
+        for b in blocks:
+            start_key = f"{day}:{b.task_id}:{b.start:%H:%M}:start"
+            if b.start - timedelta(minutes=6) <= now < b.end and not store.was_notified(self.conn, start_key):
+                part = f", {t['part'].format(i=b.part, n=b.parts)}" if b.parts > 1 else ""
+                lines.append(t["nudge_start"].format(time=b.start.strftime("%H:%M"), name=b.name,
+                                                     minutes=b.minutes, part=part))
+                store.mark_notified(self.conn, start_key, now)
+            end_key = f"{day}:{b.task_id}:{b.end:%H:%M}:end"
+            if (b.part == b.parts and b.task_id in open_ids and b.end <= now < b.end + timedelta(hours=3)
+                    and not store.was_notified(self.conn, end_key)):
+                lines.append(t["nudge_end"].format(name=b.name, end=b.end.strftime("%H:%M"), id=b.task_id))
+                store.mark_notified(self.conn, end_key, now)
+        return "\n".join(lines)
+
+    # --- scheduling (two cron jobs that run a script, no model call) -------------------------------------
+    def _jobs(self) -> dict[str, str]:
+        listed = self._cron({"action": "list"})
+        jobs = listed.get("jobs", []) if isinstance(listed, dict) else listed
+        return {j["name"]: j["id"] for j in jobs if isinstance(j, dict) and j.get("name") in (JOB_BRIEF, JOB_NUDGE)}
+
+    def schedule(self, at_time: str = "", deliver: str = "") -> str:
+        if self._cron is None:
+            raise UserError("Scheduling needs a running Hermes session: send /day cron on from a chat.")
+        profile = self.profile()
+        start_h, start_m = divmod(prof.minutes_of(profile["work_hours"][0]), 60)
+        default = max(5 * 60, start_h * 60 + start_m - 30)
+        try:
+            minutes = prof.minutes_of(at_time) if at_time else default
+        except ValueError as exc:
+            raise UserError(str(exc))
+        days = ",".join(str(d % 7) for d in profile["workdays"])  # cron: 0 = Sunday
+        end_hour = min(23, divmod(prof.minutes_of(profile["work_hours"][1]), 60)[0] + 3)
+        scripts = self.home / "scripts"
+        scripts.mkdir(parents=True, exist_ok=True)
+        specs = {
+            JOB_BRIEF: ("brief", f"{minutes % 60} {minutes // 60} * * {days}"),
+            JOB_NUDGE: ("nudge", f"*/5 {max(0, start_h - 1)}-{end_hour} * * {days}"),
+        }
+        existing = self._jobs()
+        for name, (what, expr) in specs.items():
+            script = scripts / f"{name}.py"
+            script.write_text(SCRIPT_TEMPLATE.format(plugin=str(self.plugin_dir), what=what), encoding="utf-8")
+            args = {"schedule": expr, "script": script.name, "no_agent": True, "name": name}
+            if deliver:
+                args["deliver"] = deliver
+            if name in existing:
+                reply = self._cron({"action": "update", "job_id": existing[name], **args})
+            else:
+                reply = self._cron({"action": "create", "prompt": f"Run {script.name}", **args})
+            if isinstance(reply, dict) and (reply.get("error") or reply.get("success") is False):
+                raise UserError(f"Hermes refused the {what} job: {reply.get('error') or reply}")
+        h, m = divmod(minutes, 60)
+        return (f"Scheduled: a morning brief at {h:02d}:{m:02d} on your workdays, and a reminder check every 5 "
+                f"minutes during work hours (it speaks only when a block is about to start or ended). Both run "
+                f"a small script, no model call, no token cost. Scripts: {scripts}. Turn off: /day cron off")
+
+    def unschedule(self) -> str:
+        if self._cron is None:
+            raise UserError("Scheduling needs a running Hermes session: send /day cron off from a chat.")
+        jobs = self._jobs()
+        for job_id in jobs.values():
+            self._cron({"action": "remove", "job_id": job_id})
+        return f"Removed {len(jobs)} scheduled job(s)." if jobs else "Nothing was scheduled."
+
+    def schedule_status(self) -> str:
+        if self._cron is None:
+            raise UserError("Scheduling needs a running Hermes session: send /day cron status from a chat.")
+        jobs = self._jobs()
+        return "Scheduled: " + ", ".join(sorted(jobs)) if jobs else "Nothing scheduled. Turn on: /day cron on 07:30"
 
     def plan_text(self, day_text: str = "") -> str:
         day = parse_day(day_text, self.now().date())

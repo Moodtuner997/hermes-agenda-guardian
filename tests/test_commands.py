@@ -141,7 +141,7 @@ def test_registration_and_tools_round_trip(tmp_path, monkeypatch):
     ctx = Ctx()
     agenda_guardian.register(ctx)
     assert set(ctx.commands) == {"day"} and set(ctx.cli) == {"day"}
-    assert set(ctx.tools) == {"day_setup", "day_add_task", "day_plan", "day_done", "day_tasks"}
+    assert set(ctx.tools) == {"day_setup", "day_add_task", "day_plan", "day_done", "day_tasks", "day_schedule"}
 
     call = lambda name, args: json.loads(ctx.tools[name](args))
     assert call("day_setup", {})["questions"].startswith("Agenda guardian setup")

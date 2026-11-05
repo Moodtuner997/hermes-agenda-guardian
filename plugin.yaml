@@ -20,4 +20,5 @@ provides_tools:
   - day_plan
   - day_done
   - day_tasks
+  - day_schedule
 provides_hooks: []

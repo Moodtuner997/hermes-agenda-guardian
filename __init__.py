@@ -25,7 +25,21 @@ def _home() -> Path:
         return Path(os.environ.get("HERMES_HOME") or Path.home() / ".hermes")
 
 
-def _guardian() -> Guardian:
+_CTX: Any = None
+
+
+def _cron(args: dict) -> dict:
+    """The cronjob tool, called the way a plugin may: through the registry, so Hermes' own checks apply."""
+    if _CTX is None:
+        raise UserError("Scheduling needs a running Hermes session: send /day cron on from a chat.")
+    reply = _CTX.dispatch_tool("cronjob_manage", args)
+    try:
+        return json.loads(reply) if isinstance(reply, str) else dict(reply)
+    except (TypeError, ValueError):
+        return {"error": f"unreadable answer from cronjob_manage: {str(reply)[:200]}"}
+
+
+def _guardian(*, with_cron: bool = True) -> Guardian:
     """Built per call: the active profile (and so the data folder) can change between calls."""
     try:
         from plugins.plugin_storage import plugin_data_dir
@@ -34,7 +48,14 @@ def _guardian() -> Guardian:
     except Exception:
         data = _home() / "plugin-data" / "agenda-guardian"
         data.mkdir(parents=True, exist_ok=True)
-    return Guardian(data / "guardian.db", _home())
+    return Guardian(data / "guardian.db", _home(), cron=_cron if with_cron else None,
+                    plugin_dir=Path(__file__).resolve().parent)
+
+
+def scheduled_text(what: str) -> str:
+    """Entry point of the two cron scripts: the morning brief, or the reminder check ("" = say nothing)."""
+    guardian = _guardian(with_cron=False)
+    return guardian.brief_text() if what == "brief" else guardian.nudge_text()
 
 
 def _slash(raw_args: str = "", **_: Any) -> str:
@@ -94,6 +115,15 @@ def _t_setup(g: Guardian, a: dict) -> dict:
     return {"result": g.set_rules([(str(k), str(v)) for k, v in settings.items()])}
 
 
+def _t_schedule(g: Guardian, a: dict) -> dict:
+    action = str(a.get("action", "status")).lower()
+    if action == "on":
+        return {"message": g.schedule(str(a.get("time", "")), str(a.get("deliver", "")))}
+    if action == "off":
+        return {"message": g.unschedule()}
+    return {"message": g.schedule_status()}
+
+
 def _schema(name: str, description: str, properties: dict, required: list | None = None) -> dict:
     params: dict = {"type": "object", "properties": properties, "additionalProperties": False}
     if required:
@@ -126,10 +156,17 @@ _TOOLS = [
         {"task": {**_S, "description": "task number or part of its name"}, "actual_minutes": {"type": "integer"}},
         ["task"])),
     ("day_tasks", _t_tasks, _schema("day_tasks", "List the open tasks with their estimates.", {})),
+    ("day_schedule", _t_schedule, _schema(
+        "day_schedule", "Turn the proactive part on or off: a morning brief on workdays and a reminder when a "
+        "block starts or ends. Creates two script-only cron jobs (no model call). Ask the user before 'on'.",
+        {"action": {**_S, "enum": ["on", "off", "status"]}, "time": {**_S, "description": "HH:MM, brief time"},
+         "deliver": {**_S, "description": "where to send, e.g. telegram; omit for this chat"}}, ["action"])),
 ]
 
 
 def register(ctx: Any) -> None:
+    global _CTX
+    _CTX = ctx
     ctx.register_command("day", _slash, description="Plan your day from your rules, estimates and calendar",
                          args_hint="setup | set | add | plan | now | done | brief")
     ctx.register_cli_command("day", "Plan your day from your rules, estimates and calendar", _cli_setup, _cli_run)

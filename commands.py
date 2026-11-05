@@ -15,7 +15,9 @@ HELP = """/day setup                         the rules to answer (work hours, fo
 /day now                           what to do right now
 /day done <# or name> <real minutes>    log the real time (this calibrates the plan)
 /day drop <# or name>              forget a task
-/day brief                         the morning brief (today, or tomorrow after work hours)"""
+/day brief                         the morning brief (today, or tomorrow after work hours)
+/day cron on [HH:MM] [deliver=..]  send the brief every workday morning and remind you when a block starts
+/day cron off | status             stop / check those two scheduled jobs (no model call, no token cost)"""
 
 _DURATION = re.compile(r"^\d+(h(\d+)?|m|min)?$|^\d+h\d*m?$", re.I)
 
@@ -83,6 +85,20 @@ def run(guardian: Guardian, raw: str) -> str:
             return guardian.drop(" ".join(args))
         if command == "brief":
             return guardian.brief_text()
+        if command == "nudge":
+            return guardian.nudge_text() or "(nothing to say right now)"
+        if command == "cron":
+            action = args[0].lower() if args else "status"
+            if action == "on":
+                rest = args[1:]
+                deliver = next((a.partition("=")[2] for a in rest if a.startswith("deliver=")), "")
+                at_time = next((a for a in rest if not a.startswith("deliver=")), "")
+                return guardian.schedule(at_time, deliver)
+            if action == "off":
+                return guardian.unschedule()
+            if action == "status":
+                return guardian.schedule_status()
+            raise UserError("/day cron on [HH:MM] [deliver=telegram] | off | status")
         return f"Unknown command '{command}'.\n{HELP}"
     except UserError as exc:
         return f"! {exc}"

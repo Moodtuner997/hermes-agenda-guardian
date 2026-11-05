@@ -1,0 +1,42 @@
+.ag-page { display: flex; flex-direction: column; gap: 0.75rem; padding: 1rem; max-width: 1200px; }
+.ag-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.ag-head h1 { font-size: 1.25rem; font-weight: 600; margin: 0; }
+.ag-inline { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.ag-grid { display: grid; grid-template-columns: minmax(320px, 1.4fr) minmax(280px, 1fr); gap: 0.75rem; align-items: start; }
+@media (max-width: 860px) { .ag-grid { grid-template-columns: 1fr; } }
+.ag-side { display: flex; flex-direction: column; gap: 0.75rem; }
+.ag-card h2 { font-size: 0.95rem; font-weight: 600; margin: 0 0 0.5rem; }
+.ag-card ul { margin: 0; padding-left: 1.1rem; font-size: 0.85rem; display: flex; flex-direction: column; gap: 0.3rem; }
+.ag-card ul.ag-tasks, .ag-card ul.ag-rules { padding-left: 0; list-style: none; }
+.ag-muted { color: var(--color-muted-foreground); font-size: 0.8rem; }
+.ag-error { color: var(--color-destructive); font-size: 0.85rem; margin: 0; }
+.ag-warn { color: var(--color-destructive); font-size: 0.85rem; margin: 0; }
+
+.ag-timeline { position: relative; margin-left: 3rem; border-left: 1px solid var(--color-border); }
+.ag-hour { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--color-border); }
+.ag-hour span { position: absolute; left: -3rem; top: -0.55rem; width: 2.6rem; text-align: right;
+  font-family: var(--font-mono); font-size: 0.7rem; color: var(--color-muted-foreground); }
+.ag-layer { position: absolute; inset: 0; }
+.ag-box { position: absolute; left: 0.25rem; right: 0.25rem; border-radius: 0.4rem; padding: 0.15rem 0.5rem;
+  font-size: 0.78rem; line-height: 1.25; overflow: hidden; box-sizing: border-box; }
+.ag-focus { background: color-mix(in srgb, var(--color-primary) 7%, transparent); left: 0; right: 0; border-radius: 0; }
+.ag-protected { background: repeating-linear-gradient(135deg, transparent 0 6px,
+  color-mix(in srgb, var(--color-muted-foreground) 22%, transparent) 6px 7px);
+  color: var(--color-muted-foreground); border: 1px dashed var(--color-border); }
+.ag-event { background: color-mix(in srgb, var(--color-muted-foreground) 24%, var(--color-card));
+  color: var(--color-foreground); border: 1px solid var(--color-border); left: 40%; }
+.ag-task { background: color-mix(in srgb, var(--color-primary) 80%, var(--color-card)); color: var(--color-card);
+  cursor: pointer; font-weight: 600; right: 40%; }
+.ag-task.ag-selected { outline: 2px solid var(--color-ring); }
+.ag-now { position: absolute; left: 0; right: 0; height: 0; border-top: 2px solid var(--color-destructive); z-index: 2; }
+.ag-now::before { content: ""; position: absolute; left: -5px; top: -6px; width: 9px; height: 9px;
+  border-radius: 50%; background: var(--color-destructive); }
+.ag-detail { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--color-border); font-size: 0.85rem; }
+.ag-detail ul { margin: 0.35rem 0 0; padding-left: 1.1rem; }
+
+.ag-task-row { display: flex; flex-direction: column; gap: 0.3rem; padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--color-border); }
+.ag-form { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.6rem; }
+.ag-small { max-width: 9rem; }
+.ag-select { background: transparent; color: var(--color-foreground); border: 1px solid var(--color-border);
+  border-radius: 0.4rem; padding: 0.35rem 0.5rem; font-size: 0.85rem; }

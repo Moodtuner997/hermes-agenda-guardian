@@ -182,7 +182,8 @@ class Guardian:
         return f"Dropped #{task.id} {task.name}"
 
     # --- plans -------------------------------------------------------------------------------------------
-    def make_plan(self, day: date | None = None, from_now: bool = False) -> tuple[Plan, dict]:
+    def make_plan(self, day: date | None = None, from_now: bool = False,
+                  remember: bool = True) -> tuple[Plan, dict]:
         profile, now = self.profile(), self.now()
         day = day or now.date()
         warnings: list[str] = []
@@ -196,7 +197,8 @@ class Guardian:
             warnings.append(f"Calendar unreadable ({exc}): the plan ignores your meetings.")
         plan = planner.plan_day(day, events, store.tasks(self.conn), profile, store.factors(self.conn),
                                 now if from_now else None, warnings)
-        self._remember(plan)
+        if remember:
+            self._remember(plan)
         return plan, profile
 
     def _remember(self, plan: Plan) -> None:

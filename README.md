@@ -114,6 +114,8 @@ removes them. Replanning during the day does not make a block announce itself tw
 
 ## Dashboard
 
+![The Today tab on an invented day](docs/today.png)
+
 A **Today** tab: a timeline of the day (meetings, protected time, focus window, planned blocks, a now line),
 the reason behind a block when you click it, what does not fit, the rules used, and your open tasks with a
 field to log the real time. Reading it changes nothing the reminders follow.

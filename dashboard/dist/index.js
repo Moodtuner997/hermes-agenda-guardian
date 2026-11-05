@@ -19,7 +19,7 @@
   const TEXT = {
     en: {
       title: "Today", today: "Today", planned: "planned", free: "free", notToday: "Not today", rules: "Rules used",
-      why: "Why here", tasks: "Open tasks", add: "Add a task", name: "Task", minutes: "Your estimate (min)",
+      why: "Why here", tasks: "Open tasks", add: "Add a task", name: "Task", minutes: "Minutes",
       priority: "Priority", realTime: "Real minutes", done: "Done", empty: "Nothing planned for this day.",
       pick: "Click a block to see why it is there.", meeting: "Meeting", noTasks: "No open task.",
       learn: "Log the real time: the plan learns your pace from it.",
@@ -27,7 +27,7 @@
     fr: {
       title: "Aujourd'hui", today: "Aujourd'hui", planned: "planifié", free: "libre", notToday: "Pas aujourd'hui",
       rules: "Règles appliquées", why: "Pourquoi ici", tasks: "Tâches ouvertes", add: "Ajouter une tâche", name: "Tâche",
-      minutes: "Ton estimation (min)", priority: "Priorité", realTime: "Minutes réelles", done: "Fait",
+      minutes: "Minutes", priority: "Priorité", realTime: "Minutes réelles", done: "Fait",
       empty: "Rien de planifié ce jour-là.", pick: "Clique un bloc pour voir pourquoi il est là.", meeting: "Réunion",
       noTasks: "Aucune tâche ouverte.", learn: "Note le temps réel : le plan apprend ton rythme.",
     },
@@ -141,7 +141,8 @@
   // ---- page -------------------------------------------------------------------------------------------
 
   function Page() {
-    const a = useState(""), day = a[0], setDay = a[1];
+    const a = useState(function () { return new URLSearchParams(window.location.search).get("day") || ""; }),
+      day = a[0], setDay = a[1];
     const b = useState(null), data = b[0], setData = b[1];
     const c = useState(null), error = c[0], setError = c[1];
     const e = useState(-1), selected = e[0], setSelected = e[1];

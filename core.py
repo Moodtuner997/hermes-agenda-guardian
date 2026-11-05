@@ -242,7 +242,10 @@ class Guardian:
     # --- scheduling (two cron jobs that run a script, no model call) -------------------------------------
     def _jobs(self) -> dict[str, str]:
         listed = self._cron({"action": "list"})
-        jobs = listed.get("jobs", []) if isinstance(listed, dict) else listed
+        if not isinstance(listed, dict) or listed.get("error") or not isinstance(listed.get("jobs"), list):
+            raise UserError("Hermes did not list its cron jobs, so nothing was changed "
+                            f"({(listed.get('error') if isinstance(listed, dict) else None) or 'unexpected answer'}).")
+        jobs = listed["jobs"]
         return {j["name"]: j.get("job_id") or j.get("id") for j in jobs
                 if isinstance(j, dict) and j.get("name") in (JOB_BRIEF, JOB_NUDGE) and (j.get("job_id") or j.get("id"))}
 

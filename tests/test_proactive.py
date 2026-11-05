@@ -135,6 +135,17 @@ def test_the_script_does_not_need_hermes_home_in_its_environment(make_guardian, 
     assert "Write the quote" in done.stdout or "Not a workday" in done.stdout   # read this DB, not an empty one
 
 
+def test_a_failed_job_listing_changes_nothing_and_keeps_the_scripts(make_guardian, tmp_path):
+    cron = FakeCron()
+    g = make_guardian(cron=cron, plugin_dir=ROOT)
+    commands.run(g, "cron on")
+    broken = make_guardian(cron=lambda args: {"success": False, "error": "no scheduler here"}, plugin_dir=ROOT)
+    for action in ("off", "status", "on"):
+        out = commands.run(broken, f"cron {action}")
+        assert out.startswith("! Hermes did not list its cron jobs") and "no scheduler here" in out
+    assert len(list((tmp_path / "scripts").iterdir())) == 2
+
+
 def test_cron_without_a_session_explains_itself(make_guardian):
     assert "needs a running Hermes session" in commands.run(make_guardian(), "cron on")
 

@@ -75,7 +75,7 @@ def _cli_setup(parser: Any) -> None:
 def _cli_run(args: Any) -> None:
     import shlex
 
-    print(commands.run(_guardian(), " ".join(shlex.quote(a) for a in (getattr(args, "rest", None) or ["help"]))))
+    print(commands.run(_guardian(with_cron=False), " ".join(shlex.quote(a) for a in (getattr(args, "rest", None) or ["help"]))))
 
 
 # --- tools: the same core, structured arguments, JSON out -------------------------------------------------

@@ -81,7 +81,14 @@ EN = {
 /day drop <# or name>              forget a task
 /day brief                         the morning brief (today, or tomorrow after work hours)
 /day cron on [HH:MM] [deliver=..]  send the brief every workday morning and remind you when a block starts
-/day cron off | status             stop / check those two scheduled jobs (no model call, no token cost)""",
+/day cron off | status             stop / check those two scheduled jobs (no model call, no token cost)
+/day kind <name> real=2h before=15 after=30 window=18:00-22:00 days=mon,thu   what an activity really takes and when it fits (alone: the list)
+/day habit <day> <HH:MM-HH:MM> <label>   something you do that is not in the calendar (alone: the list; rm <#>)
+/day propose <activity> [count] [days=mon,thu]   where it could go, with the reasons; writes nothing
+/day ok <proposal> [days=mon]      write a proposal to your Google calendar (needs /day write on, typed by you)
+/day undo [last|all|<#>]           remove what this plugin wrote; never anything else
+/day took <session # or activity> <minutes>   how long it really took (this corrects the next proposal)
+/day write on|off|status           allow or forbid writing to your calendar""",
     # --- planner ---------------------------------------------------------------------------------------------
     "why_factor": "{planned} min = your estimate {est} x {value:g} (median of {count} finished '{category}' tasks)",
     "why_count": "{planned} min = your estimate ({count} finished '{category}' task{s}; calibration starts at 3)",
@@ -225,7 +232,14 @@ FR = {
 /day drop <n° ou nom>              oublier une tâche
 /day brief                         le brief du matin (aujourd'hui, ou demain après les heures de travail)
 /day cron on [HH:MM] [deliver=..]  envoyer le brief chaque matin travaillé et te prévenir quand un bloc commence
-/day cron off | status             arrêter / vérifier ces deux tâches planifiées (sans modèle, sans coût en jetons)""",
+/day cron off | status             arrêter / vérifier ces deux tâches planifiées (sans modèle, sans coût en jetons)
+/day kind <nom> real=2h before=15 after=30 window=18:00-22:00 days=lun,jeu   ce qu'une activité prend vraiment et quand elle tient (seul : la liste)
+/day habit <jour> <HH:MM-HH:MM> <nom>    ce que tu fais hors agenda (seul : la liste ; rm <n°>)
+/day propose <activité> [nombre] [days=lun,jeu]   où la mettre, avec les raisons ; n'écrit rien
+/day ok <proposition> [days=lun]   écrire une proposition dans ton agenda Google (demande /day write on, tapé par toi)
+/day undo [last|all|<n°>]          retirer ce que ce plugin a écrit ; jamais autre chose
+/day took <n° de séance ou activité> <minutes>   le temps réel (corrige la prochaine proposition)
+/day write on|off|status           autoriser ou interdire l'écriture dans ton agenda""",
     "why_factor": "{planned} min = ton estimation {est} x {value:g} (médiane de {count} tâches « {category} » "
                   "terminées)",
     "why_count": "{planned} min = ton estimation ({count} tâche{s} « {category} » terminée{s} ; le calibrage "
@@ -289,6 +303,23 @@ FR = {
     "ref_none": "aucune tâche ouverte ne correspond à « {ref} »",
     "ref_several": "« {ref} » correspond à plusieurs tâches ({names}) ; utilise le numéro",
 }
+
+
+from .texts_agenda import DAYS as _DAYS  # noqa: E402
+from .texts_agenda import EN as _EN  # noqa: E402
+from .texts_agenda import FR as _FR  # noqa: E402
+
+EN.update(_EN)
+FR.update(_FR)
+
+
+def day_name(lang: str, weekday: int) -> str:
+    """Full weekday name, 1 = Monday."""
+    return _DAYS["fr" if lang == "fr" else "en"][weekday - 1]
+
+
+def hm(minutes: int) -> str:
+    return f"{minutes // 60}h{minutes % 60:02d}" if minutes >= 60 else f"{minutes} min"
 
 
 def tr(lang: str, key: str, /, **kw) -> str:

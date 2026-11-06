@@ -131,6 +131,56 @@ def _t_schedule(g: Guardian, a: dict) -> dict:
     return {"message": g.schedule_status()}
 
 
+def _day(text: Any, g: Guardian) -> Any:
+    return parse_day(str(text), g.now().date(), g.lang()) if text else None
+
+
+def _t_kind(g: Guardian, a: dict) -> dict:
+    action = str(a.get("action", "list")).lower()
+    if action == "list":
+        return g.kinds_view()
+    if action == "remove":
+        return g.kind_remove(str(a.get("name", "")))
+    if a.get("real_minutes") is None:
+        raise UserError("real_minutes is required: ask the user how long the activity itself really takes.")
+    return g.kind_set(str(a.get("name", "")), int(a["real_minutes"]), int(a.get("before_minutes") or 0),
+                      int(a.get("after_minutes") or 0), str(a.get("window", "")), str(a.get("days", "")))
+
+
+def _t_habit(g: Guardian, a: dict) -> dict:
+    action = str(a.get("action", "list")).lower()
+    if action == "list":
+        return g.habits_view()
+    if action == "remove":
+        return g.habit_remove(int(a.get("id", 0)))
+    return g.habit_add(str(a.get("day", "")), str(a.get("hours", "")), str(a.get("label", "")))
+
+
+def _t_propose(g: Guardian, a: dict) -> dict:
+    result = g.propose(str(a.get("activity", "")), int(a.get("count") or 1), _day(a.get("from_day"), g),
+                       _day(a.get("to_day"), g), str(a.get("days", "")))
+    result["for_agent"] = tr("en", "agent_propose")
+    return result
+
+
+def _t_confirm(g: Guardian, a: dict) -> dict:
+    return g.confirm(int(a.get("proposal_id", 0)), str(a.get("days", "")))
+
+
+def _t_undo(g: Guardian, a: dict) -> dict:
+    return g.undo(str(a.get("which", "last")))
+
+
+def _t_took(g: Guardian, a: dict) -> dict:
+    if a.get("actual_minutes") is None:
+        raise UserError("actual_minutes is required: ask the user how long it really took.")
+    return g.took(str(a.get("session", "")), int(a["actual_minutes"]))
+
+
+def _t_week(g: Guardian, a: dict) -> dict:
+    return g.week_view(_day(a.get("week_of"), g))
+
+
 def _schema(name: str, description: str, properties: dict, required: list | None = None) -> dict:
     params: dict = {"type": "object", "properties": properties, "additionalProperties": False}
     if required:
@@ -166,12 +216,94 @@ _TOOLS = [
         {"task": {**_S, "description": "task number or part of its name"}, "actual_minutes": {"type": "integer"}},
         ["task"])),
     ("day_tasks", _t_tasks, _schema("day_tasks", "List the open tasks with their estimates.", {})),
+    ("day_kind", _t_kind, _schema(
+        "day_kind", "The activity sheet: what one kind of activity (sport, a call block, shopping...) really takes. "
+        "ASK the user for each number, never guess: real_minutes (the activity itself, at their honest pace), "
+        "before_minutes (getting ready), after_minutes (shower, travel, winding down), window (HH:MM-HH:MM in which "
+        "everything must fit) and days (preferred weekdays, e.g. 'mon,thu'). action: set (default when real_minutes "
+        "is given), list, remove.",
+        {"action": {**_S, "enum": ["set", "list", "remove"]}, "name": _S, "real_minutes": {"type": "integer"},
+         "before_minutes": {"type": "integer"}, "after_minutes": {"type": "integer"}, "window": _S, "days": _S})),
+    ("day_habit", _t_habit, _schema(
+        "day_habit", "Things the user does that are NOT in their calendar (a family dinner every Wednesday evening): "
+        "they count as busy when proposing. action: add (day, hours HH:MM-HH:MM, label), list, remove (id).",
+        {"action": {**_S, "enum": ["add", "list", "remove"]}, "day": _S, "hours": _S, "label": _S,
+         "id": {"type": "integer"}})),
+    ("day_propose", _t_propose, _schema(
+        "day_propose", "Where could this activity go in the user's week? Reads the Google calendar and its last "
+        "eight weeks, returns concrete slots WITH THE REASONS (free time, what the history says about each day, "
+        "how heavy the day usually is), the days left out and why, and the questions to ask the user. Writes "
+        "NOTHING. Show the reasons to the user, ask the questions (especially what is planned but not in the "
+        "calendar), and wait for a clear yes.",
+        {"activity": {**_S, "description": "the activity sheet name"}, "count": {"type": "integer"},
+         "days": {**_S, "description": "force these weekdays, e.g. 'tue' (the user's explicit wish)"},
+         "from_day": {**_S, "description": "today (default), tomorrow, +N, fri, YYYY-MM-DD"},
+         "to_day": {**_S, "description": "last day to consider (default: 6 days after from_day)"}},
+        ["activity"])),
+    ("day_confirm", _t_confirm, _schema(
+        "day_confirm", "Write a proposal to the user's Google calendar. Call it ONLY after the user has clearly "
+        "said yes to this exact proposal in this conversation; never on your own initiative. It refuses unless the "
+        "user themselves turned writing on (/day write on). It never touches an existing event: it only adds "
+        "events marked as created by this plugin.",
+        {"proposal_id": {"type": "integer"}, "days": {**_S, "description": "only these weekdays of the proposal"}},
+        ["proposal_id"])),
+    ("day_undo", _t_undo, _schema(
+        "day_undo", "Take back what this plugin wrote: the last session ('last'), a session number, or 'all'. It can "
+        "only remove events this plugin created and still recognises; it never removes anything else.",
+        {"which": _S})),
+    ("day_took", _t_took, _schema(
+        "day_took", "Record how long a finished activity REALLY took (the activity itself). Ask the user; the next "
+        "proposal is corrected by their own pace.",
+        {"session": {**_S, "description": "session number from the question, or the activity name"},
+         "actual_minutes": {"type": "integer"}}, ["session", "actual_minutes"])),
+    ("day_week", _t_week, _schema(
+        "day_week", "The user's week as the plugin sees it: calendar events, what it wrote, what is proposed and "
+        "waiting for a yes. Read-only.", {"week_of": {**_S, "description": "any day of the week; default this week"}})),
     ("day_schedule", _t_schedule, _schema(
         "day_schedule", "Turn the proactive part on or off: a morning brief on workdays and a reminder when a "
         "block starts or ends. Creates two script-only cron jobs (no model call). Ask the user before 'on'.",
         {"action": {**_S, "enum": ["on", "off", "status"]}, "time": {**_S, "description": "HH:MM, brief time"},
          "deliver": {**_S, "description": "where to send, e.g. telegram; omit for this chat"}}, ["action"])),
 ]
+
+
+RULES = {
+    "en": (
+        "agenda-guardian manages the user's agenda. When they talk about fitting an activity into their week, "
+        "or about their agenda:\n"
+        "1. Learn what the activity really takes with day_kind: ask for the real duration, the time to get ready "
+        "before, the time to wind down after, and when it can happen. Never guess these numbers.\n"
+        "2. Use day_propose, then tell the user the proposal in plain words WITH ITS REASONS (taken from their "
+        "calendar history), the days left out and why, and ask what is planned that is not in the calendar.\n"
+        "3. Call day_confirm only after the user clearly said yes to that proposal in this conversation. If "
+        "writing is off, tell them to type /day write on themselves.\n"
+        "4. Never modify or delete an event the user created (priorities, medical appointments, unforeseen "
+        "things). Only day_undo removes anything, and only what this plugin wrote.\n"
+        "5. After an activity ends, ask how long it really took and record it with day_took.\n"
+        "Speak like a person: do not show command syntax unless asked."),
+    "fr": (
+        "agenda-guardian gère l'agenda de l'utilisateur. Quand il parle de caser une activité dans sa semaine "
+        "ou de son agenda :\n"
+        "1. Apprends ce que l'activité prend vraiment avec day_kind : demande la durée réelle, le temps pour se "
+        "préparer avant, le temps pour redescendre après, et quand c'est possible. Ne devine jamais ces "
+        "chiffres.\n"
+        "2. Utilise day_propose, puis dis la proposition en mots simples AVEC SES RAISONS (tirées de "
+        "l'historique de son agenda), les jours écartés et pourquoi, et demande ce qui est prévu hors agenda.\n"
+        "3. N'appelle day_confirm qu'après un oui clair à cette proposition dans cette conversation. Si "
+        "l'écriture est désactivée, dis-lui de taper /day write on lui-même.\n"
+        "4. Ne modifie ni ne supprime jamais un événement créé par l'utilisateur (priorités, rendez-vous "
+        "médicaux, imprévus). Seul day_undo retire quelque chose, et seulement ce que ce plugin a écrit.\n"
+        "5. Quand une activité est finie, demande combien de temps elle a vraiment pris et note-le avec "
+        "day_took.\n"
+        "Parle comme une personne : ne montre pas la syntaxe des commandes sauf si on te la demande."),
+}
+
+
+def _rules(_info: Any = None) -> str:
+    try:
+        return RULES[_guardian(with_cron=False).lang()]
+    except Exception:
+        return RULES["en"]
 
 
 def register(ctx: Any) -> None:
@@ -183,3 +315,5 @@ def register(ctx: Any) -> None:
     for name, fn, schema in _TOOLS:
         ctx.register_tool(name=name, toolset="agenda-guardian", schema=schema, handler=_tool(fn),
                           description=schema["description"], emoji="🗓")
+    if hasattr(ctx, "register_system_prompt_section"):  # older Hermes: the tool descriptions carry the rules
+        ctx.register_system_prompt_section("agenda-guardian", _rules)

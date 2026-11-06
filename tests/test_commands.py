@@ -150,7 +150,9 @@ def test_registration_and_tools_round_trip(tmp_path, monkeypatch):
     ctx = Ctx()
     agenda_guardian.register(ctx)
     assert set(ctx.commands) == {"day"} and set(ctx.cli) == {"guardian"}
-    assert set(ctx.tools) == {"day_setup", "day_add_task", "day_plan", "day_done", "day_tasks", "day_schedule"}
+    assert set(ctx.tools) == {"day_setup", "day_add_task", "day_plan", "day_done", "day_tasks", "day_schedule",
+                              "day_kind", "day_habit", "day_propose", "day_confirm", "day_undo", "day_took",
+                              "day_week"}
 
     call = lambda name, args: json.loads(ctx.tools[name](args))
     assert call("day_setup", {})["questions"].startswith("Agenda guardian setup")
@@ -163,3 +165,17 @@ def test_registration_and_tools_round_trip(tmp_path, monkeypatch):
     assert call("day_done", {"task": "1", "actual_minutes": 60})["ok"]
     assert "calendar" in ctx.commands["day"]("setup")
     assert (tmp_path / "plugin-data" / "agenda-guardian" / "guardian.db").exists()
+
+
+def test_no_tool_can_switch_calendar_writing_on(tmp_path, monkeypatch):
+    """Only the user's own typed command turns writing on: the agent has no tool or setting for it."""
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    ctx = Ctx()
+    agenda_guardian.register(ctx)
+    call = lambda name, args: json.loads(ctx.tools[name](args))
+    assert not [n for n in ctx.tools if "write" in n]
+    refused = call("day_setup", {"settings": {"calendar_write": "on"}})
+    assert "unknown setting" in refused["result"] and "refused" in refused["result"]
+    blocked = call("day_confirm", {"proposal_id": 1})
+    assert blocked["ok"] is False and "write on" in blocked["error"]
+    assert "Writing is off" in ctx.commands["day"]("write status")

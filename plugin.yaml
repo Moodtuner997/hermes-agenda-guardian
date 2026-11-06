@@ -21,4 +21,11 @@ provides_tools:
   - day_done
   - day_tasks
   - day_schedule
+  - day_kind
+  - day_habit
+  - day_propose
+  - day_confirm
+  - day_undo
+  - day_took
+  - day_week
 provides_hooks: []

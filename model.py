@@ -6,6 +6,10 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 
 
+class UserError(ValueError):
+    """A mistake in what the user typed; the message tells them how to fix it."""
+
+
 @dataclass(frozen=True)
 class Event:
     title: str

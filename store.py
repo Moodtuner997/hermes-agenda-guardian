@@ -26,6 +26,19 @@ CREATE TABLE IF NOT EXISTS samples (
   est_min INTEGER NOT NULL, actual_min INTEGER NOT NULL, logged_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS plan_cache (day TEXT PRIMARY KEY, json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS notified (key TEXT PRIMARY KEY, at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS kinds (
+  name TEXT PRIMARY KEY, real_min INTEGER NOT NULL, before_min INTEGER NOT NULL, after_min INTEGER NOT NULL,
+  win_start TEXT NOT NULL, win_end TEXT NOT NULL, days TEXT NOT NULL, set_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS habits (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, weekday INTEGER NOT NULL, start TEXT NOT NULL, end TEXT NOT NULL,
+  label TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS proposals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL,
+  payload TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS written (
+  event_id TEXT PRIMARY KEY, calendar_id TEXT NOT NULL, group_id INTEGER NOT NULL, proposal_id INTEGER,
+  kind TEXT NOT NULL, part TEXT NOT NULL, summary TEXT NOT NULL, start TEXT NOT NULL, end TEXT NOT NULL,
+  link TEXT NOT NULL, created_at TEXT NOT NULL, removed_at TEXT, removed_why TEXT);
 """
 
 
@@ -137,4 +150,150 @@ def was_notified(conn, key: str) -> bool:
 def mark_notified(conn, key: str, now: datetime) -> None:
     conn.execute("INSERT OR IGNORE INTO notified(key, at) VALUES(?, ?)", (key, now.isoformat()))
     conn.execute("DELETE FROM notified WHERE at < ?", ((now - timedelta(days=14)).isoformat(),))
+    conn.commit()
+
+
+# --- activity sheets, habits, proposals, written events --------------------------------------------------
+
+def get_flag(conn, key: str) -> bool:
+    row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    return bool(row) and row[0] == "1"
+
+
+def set_flag(conn, key: str, on: bool) -> None:
+    conn.execute("INSERT INTO settings(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                 (key, "1" if on else "0"))
+    conn.commit()
+
+
+def save_kind(conn, kind, now: datetime) -> None:
+    conn.execute(
+        "INSERT INTO kinds(name, real_min, before_min, after_min, win_start, win_end, days, set_at) "
+        "VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(name) DO UPDATE SET real_min=excluded.real_min, "
+        "before_min=excluded.before_min, after_min=excluded.after_min, win_start=excluded.win_start, "
+        "win_end=excluded.win_end, days=excluded.days, set_at=excluded.set_at",
+        (kind.name, kind.real_min, kind.before_min, kind.after_min, kind.win[0], kind.win[1],
+         ",".join(map(str, kind.days)), now.date().isoformat()))
+    conn.commit()
+
+
+def _kind(row):
+    from .kinds import Kind
+
+    return Kind(row[0], row[1], row[2], row[3], (row[4], row[5]),
+                tuple(int(d) for d in row[6].split(",") if d), row[7])
+
+
+_KIND_COLS = "name, real_min, before_min, after_min, win_start, win_end, days, set_at"
+
+
+def kinds(conn) -> list:
+    return [_kind(r) for r in conn.execute(f"SELECT {_KIND_COLS} FROM kinds ORDER BY name")]
+
+
+def get_kind(conn, name: str):
+    row = conn.execute(f"SELECT {_KIND_COLS} FROM kinds WHERE name=?", (name.strip().lower(),)).fetchone()
+    return _kind(row) if row else None
+
+
+def remove_kind(conn, name: str) -> bool:
+    cur = conn.execute("DELETE FROM kinds WHERE name=?", (name.strip().lower(),))
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def add_habit(conn, weekday: int, start: str, end: str, label: str, now: datetime) -> int:
+    cur = conn.execute("INSERT INTO habits(weekday, start, end, label, created_at) VALUES(?,?,?,?,?)",
+                       (weekday, start, end, label, now.isoformat()))
+    conn.commit()
+    return cur.lastrowid
+
+
+def habits(conn) -> list[dict]:
+    return [{"id": r[0], "weekday": r[1], "start": r[2], "end": r[3], "label": r[4]}
+            for r in conn.execute("SELECT id, weekday, start, end, label FROM habits ORDER BY weekday, start")]
+
+
+def remove_habit(conn, habit_id: int) -> bool:
+    cur = conn.execute("DELETE FROM habits WHERE id=?", (habit_id,))
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def add_proposal(conn, kind: str, payload: str, now: datetime) -> int:
+    cur = conn.execute("INSERT INTO proposals(kind, status, created_at, payload) VALUES(?, 'pending', ?, ?)",
+                       (kind, now.isoformat(), payload))
+    conn.commit()
+    return cur.lastrowid
+
+
+def get_proposal(conn, proposal_id: int) -> dict | None:
+    row = conn.execute("SELECT id, kind, status, created_at, payload FROM proposals WHERE id=?",
+                       (proposal_id,)).fetchone()
+    if not row:
+        return None
+    return {"id": row[0], "kind": row[1], "status": row[2], "created_at": row[3], "payload": json.loads(row[4])}
+
+
+def pending_proposals(conn) -> list[dict]:
+    rows = conn.execute("SELECT id FROM proposals WHERE status='pending' ORDER BY id").fetchall()
+    return [get_proposal(conn, r[0]) for r in rows]
+
+
+def set_proposal_status(conn, proposal_id: int, status: str) -> None:
+    conn.execute("UPDATE proposals SET status=? WHERE id=?", (status, proposal_id))
+    conn.commit()
+
+
+def new_group(conn) -> int:
+    return conn.execute("SELECT COALESCE(MAX(group_id), 0) + 1 FROM written").fetchone()[0]
+
+
+def record_written(conn, row: dict, now: datetime) -> None:
+    conn.execute(
+        "INSERT INTO written(event_id, calendar_id, group_id, proposal_id, kind, part, summary, start, end, link, "
+        "created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+        (row["event_id"], row["calendar_id"], row["group_id"], row.get("proposal_id"), row["kind"], row["part"],
+         row["summary"], row["start"], row["end"], row.get("link", ""), now.isoformat()))
+    conn.commit()
+
+
+_WRITTEN_COLS = "event_id, calendar_id, group_id, proposal_id, kind, part, summary, start, end, link, removed_at"
+
+
+def _written(row) -> dict:
+    keys = _WRITTEN_COLS.split(", ")
+    return dict(zip(keys, row))
+
+
+def written(conn, group_id: int | None = None, live_only: bool = True) -> list[dict]:
+    where, args = [], []
+    if live_only:
+        where.append("removed_at IS NULL")
+    if group_id is not None:
+        where.append("group_id=?")
+        args.append(group_id)
+    sql = f"SELECT {_WRITTEN_COLS} FROM written" + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY start"
+    return [_written(r) for r in conn.execute(sql, args)]
+
+
+def written_event(conn, event_id: str) -> dict | None:
+    row = conn.execute(f"SELECT {_WRITTEN_COLS} FROM written WHERE event_id=? AND removed_at IS NULL",
+                       (event_id,)).fetchone()
+    return _written(row) if row else None
+
+
+def mark_removed(conn, event_id: str, why: str, now: datetime) -> None:
+    conn.execute("UPDATE written SET removed_at=?, removed_why=? WHERE event_id=?", (now.isoformat(), why, event_id))
+    conn.commit()
+
+
+def last_group(conn) -> int | None:
+    row = conn.execute("SELECT MAX(group_id) FROM written WHERE removed_at IS NULL").fetchone()
+    return row[0]
+
+
+def log_sample(conn, category: str, est_min: int, actual_min: int, now: datetime) -> None:
+    conn.execute("INSERT INTO samples(task_id, category, est_min, actual_min, logged_at) VALUES(NULL,?,?,?,?)",
+                 (category, est_min, actual_min, now.isoformat()))
     conn.commit()

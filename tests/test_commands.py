@@ -132,13 +132,16 @@ def test_french_brief(make_guardian):
 
 class Ctx:
     def __init__(self):
-        self.commands, self.cli, self.tools = {}, {}, {}
+        self.commands, self.cli, self.tools, self.hooks = {}, {}, {}, {}
 
     def register_command(self, name, handler, **kw):
         self.commands[name] = handler
 
     def register_cli_command(self, name, help, setup_fn, handler_fn):
         self.cli[name] = handler_fn
+
+    def register_hook(self, name, callback, **kw):
+        self.hooks[name] = callback
 
     def register_tool(self, name, toolset, schema, handler, **kw):
         assert schema["name"] == name and schema["parameters"]["type"] == "object"
@@ -152,7 +155,8 @@ def test_registration_and_tools_round_trip(tmp_path, monkeypatch):
     assert set(ctx.commands) == {"day"} and set(ctx.cli) == {"guardian"}
     assert set(ctx.tools) == {"day_setup", "day_add_task", "day_plan", "day_done", "day_tasks", "day_schedule",
                               "day_kind", "day_habit", "day_propose", "day_confirm", "day_undo", "day_took",
-                              "day_week"}
+                              "day_week", "day_week_plan", "day_stage"}
+    assert set(ctx.hooks) == {"pre_gateway_dispatch"}
 
     call = lambda name, args: json.loads(ctx.tools[name](args))
     assert call("day_setup", {})["questions"].startswith("Agenda guardian setup")

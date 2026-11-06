@@ -14,6 +14,7 @@ from .texts import day_name, join_and, tr
 PROPOSAL_LIFETIME = timedelta(hours=24)
 HISTORY_WEEKS = history.WEEKS
 ASK_WINDOW = timedelta(hours=8)
+WEEK, STAGED = "plan:week", "plan:stage"  # the "kind" of a proposal that holds several activities / given blocks (the colon keeps them apart from activity names)
 
 
 class AgendaMixin:
@@ -121,6 +122,22 @@ class AgendaMixin:
             force = tuple(prof._weekdays(days, lang)) if days.strip() else ()
         except ValueError as exc:
             raise UserError(str(exc))
+        events, past, warnings = self._read_calendar(profile, first, last, now, lang)
+        stats = history.analyse(past, now.date(), kind.win)
+        factor = store.factors(self.conn).get(kindmod.category(kind.name), (1.0, 0))
+        result = proposer.propose(kind, factor, count, first, last, events, store.habits(self.conn), stats,
+                                  profile, now, force)
+        result.update(kind=kind.name, wanted=count, warnings=warnings, first=first.isoformat(), last=last.isoformat())
+        proposal_id = store.add_proposal(self.conn, kind.name, json.dumps(result, ensure_ascii=False), now)
+        result["proposal_id"] = proposal_id
+        result["calendar_write"] = self.write_enabled()
+        result["questions"] = self._questions(result, lang)
+        result["text"] = self._render_proposal(result, lang)
+        result["ok"] = True
+        return result
+
+    def _read_calendar(self, profile: dict, first: date, last: date, now: datetime, lang: str):
+        """The range asked for and the weeks before it, read once: (events, history events, warnings)."""
         monday = now.date() - timedelta(days=now.date().weekday())
         try:
             events, warnings = sources.fetch_range(profile, first, last, self.home, run=self._run,
@@ -130,19 +147,7 @@ class AgendaMixin:
                                              urlopen=self._urlopen)
         except sources.SourceError as exc:
             raise UserError(tr(lang, "propose_unreadable", why=exc))
-        stats = history.analyse(past, now.date(), kind.win)
-        factor = store.factors(self.conn).get(kindmod.category(kind.name), (1.0, 0))
-        result = proposer.propose(kind, factor, count, first, last, events, store.habits(self.conn), stats,
-                                  profile, now, force)
-        result.update(kind=kind.name, wanted=count, warnings=warnings + more,
-                      first=first.isoformat(), last=last.isoformat())
-        proposal_id = store.add_proposal(self.conn, kind.name, json.dumps(result, ensure_ascii=False), now)
-        result["proposal_id"] = proposal_id
-        result["calendar_write"] = self.write_enabled()
-        result["questions"] = self._questions(result, lang)
-        result["text"] = self._render_proposal(result, lang)
-        result["ok"] = True
-        return result
+        return events, past, warnings + more
 
     def _questions(self, result: dict, lang: str) -> list[str]:
         out = []
@@ -182,6 +187,186 @@ class AgendaMixin:
         lines.append(tr(lang, "prop_writes_on" if r["calendar_write"] else "prop_writes_off", id=r["proposal_id"]))
         return "\n".join(lines)
 
+    # --- a whole week in one request, and plans the agent composed -------------------------------------------
+    def _requested_kind(self, spec: dict, lang: str):
+        """One requested activity: the saved sheet (if any) completed by the numbers the user gave just now."""
+        name = " ".join(str(spec.get("name", "")).lower().split())
+        saved = store.get_kind(self.conn, name)
+
+        def first(*values):
+            return next((v for v in values if v not in (None, "")), None)
+
+        real = first(spec.get("minutes"), saved and saved.real_min)
+        if real is None:
+            raise UserError(tr(lang, "week_minutes", name=name))
+        window = first(spec.get("window"), saved and "-".join(saved.win))
+        if not window:
+            raise UserError(tr(lang, "kind_window_needed"))
+        try:
+            minutes = int(real)
+            before = int(first(spec.get("before_minutes"), saved and saved.before_min, 0))
+            after = int(first(spec.get("after_minutes"), saved and saved.after_min, 0))
+            per_day, count = int(spec.get("per_day") or 0), int(spec.get("sessions") or 1)
+        except (TypeError, ValueError):
+            raise UserError(tr(lang, "week_number", name=name))
+        for key, value, low, high in (("per_day", per_day, 0, 4), ("sessions", count, 1, 7)):
+            if not low <= value <= high:
+                raise UserError(tr(lang, "week_range", name=name, key=key, low=low, high=high))
+        days = str(first(spec.get("days"), saved and ",".join(map(str, saved.days))) or "")
+        kind = kindmod.build(name, minutes, before, after, str(window), days, lang)
+        try:  # the days said just now are a wish; a saved sheet's days are only a preference
+            force = tuple(prof._weekdays(str(spec["days"]), lang)) if spec.get("days") else ()
+        except ValueError as exc:
+            raise UserError(str(exc))
+        return kind, per_day, count, force, bool(spec.get("remember"))
+
+    def week_plan(self, activities: list, first: date | None = None, last: date | None = None) -> dict:
+        """Several activities placed in one go, each around the events and around the ones placed before it.
+        Nothing needs to be saved first: the numbers come with the request (a saved sheet only fills the gaps)."""
+        lang, profile, now = self.lang(), self.profile(), self.now()
+        if profile["calendar"]["type"] == "none":
+            raise UserError(tr(lang, "propose_need_calendar"))
+        if not isinstance(activities, list) or not 1 <= len(activities) <= 6 \
+                or not all(isinstance(a, dict) for a in activities):
+            raise UserError(tr(lang, "week_count"))
+        wanted = [self._requested_kind(spec, lang) for spec in activities]  # every request checked before any read
+        first = first or now.date()
+        last = last or first + timedelta(days=6)
+        if last < first or (last - first).days > 31:
+            raise UserError(tr(lang, "propose_range"))
+        events, past, warnings = self._read_calendar(profile, first, last, now, lang)
+        habit_rows = store.habits(self.conn)
+        taken: list[tuple[datetime, datetime]] = []
+        sessions, rejected, summary = [], [], []
+        for kind, per_day, count, force, remember in wanted:
+            factor = store.factors(self.conn).get(kindmod.category(kind.name), (1.0, 0))
+            stats = history.analyse(past, now.date(), kind.win)
+            place = proposer.fill_days if per_day else proposer.propose
+            part = place(kind, factor, per_day or count, first, last, events, habit_rows, stats, profile, now,
+                         force, tuple(taken))
+            for s in part["sessions"]:
+                s["kind"] = kind.name
+                taken.append((datetime.fromisoformat(s["block_start"]), datetime.fromisoformat(s["block_end"])))
+            sessions += part["sessions"]
+            rejected += [{**r, "kind": kind.name} for r in part["rejected"]]
+            summary.append({"activity": kind.name, "mode": "daily" if per_day else "count", "per_day": per_day,
+                            "wanted": part["wanted"] if per_day else count, "placed": len(part["sessions"]),
+                            "missing": part["missing"], "window": "-".join(kind.win), "minutes": part["minutes"],
+                            "pause_minutes": profile["break_min"]})
+            if remember:
+                store.save_kind(self.conn, kind, now)
+        sessions.sort(key=lambda s: s["block_start"])
+        result = {"sessions": sessions, "rejected": rejected, "activities": summary, "warnings": warnings,
+                  "first": first.isoformat(), "last": last.isoformat()}
+        return self._finish_plan(result, WEEK, "week_head", False, lang, now)
+
+    def stage(self, blocks: list) -> dict:
+        """Blocks the agent composed from what the user said (a fixed appointment, an evening spent elsewhere):
+        checked against the calendar, then written, and taken back, like any proposal: the one way in."""
+        from .core import parse_day
+
+        lang, profile, now = self.lang(), self.profile(), self.now()
+        if profile["calendar"]["type"] == "none":
+            raise UserError(tr(lang, "propose_need_calendar"))
+        if not isinstance(blocks, list) or not 1 <= len(blocks) <= 40 or not all(isinstance(b, dict) for b in blocks):
+            raise UserError(tr(lang, "stage_count"))
+        today, limit = now.date(), now.date() + timedelta(days=31)
+        sessions = []
+        for b in blocks:
+            title = " ".join(str(b.get("title", "")).split())
+            if not 1 <= len(title) <= 60:
+                raise UserError(tr(lang, "stage_title"))
+            day = parse_day(str(b.get("day", "")), today, lang)
+            if not today <= day <= limit:
+                raise UserError(tr(lang, "stage_range", last=limit.isoformat()))
+            try:
+                start, end = prof._range(f"{b.get('start', '')}-{b.get('end', '')}", lang)
+            except ValueError as exc:
+                raise UserError(str(exc))
+            s0, s1 = planner.at(day, start), planner.at(day, end)
+            why = " ".join(str(b.get("why") or "").split()) or tr(lang, "stage_said")
+            sessions.append({"day": day.isoformat(), "weekday": day_name(lang, day.isoweekday()),
+                             "block_start": s0.isoformat(), "start": s0.isoformat(), "end": s1.isoformat(),
+                             "block_end": s1.isoformat(), "reasons": [why], "notes": [], "kind": title})
+        sessions.sort(key=lambda s: s["start"])
+        latest = None
+        for s in sessions:
+            if latest and s["start"] < latest["end"]:
+                raise UserError(tr(lang, "stage_overlap", a=latest["kind"], b=s["kind"], day=latest["weekday"]))
+            if latest is None or s["end"] > latest["end"]:
+                latest = s
+        first, last = date.fromisoformat(sessions[0]["day"]), date.fromisoformat(max(s["day"] for s in sessions))
+        try:
+            events, warnings = sources.fetch_range(profile, first, last, self.home, run=self._run,
+                                                   urlopen=self._urlopen)
+        except sources.SourceError as exc:
+            raise UserError(tr(lang, "propose_unreadable", why=exc))
+        clashes = []
+        for s in sessions:
+            s0, s1 = datetime.fromisoformat(s["start"]), datetime.fromisoformat(s["end"])
+            other = next((e for e in events if not e.all_day and e.start < s1 and e.end > s0), None)
+            if other:
+                clashes.append(tr(lang, "stage_clash", title=s["kind"], day=s["weekday"], start=f"{s0:%H:%M}",
+                                  end=f"{s1:%H:%M}", other=other.title))
+        if clashes:
+            raise UserError("\n".join(clashes))
+        result = {"sessions": sessions, "rejected": [], "warnings": warnings, "first": first.isoformat(),
+                  "last": last.isoformat()}
+        return self._finish_plan(result, STAGED, "stage_head", True, lang, now)
+
+    def _finish_plan(self, result: dict, kind: str, head: str, show_reasons: bool, lang: str, now: datetime) -> dict:
+        proposal_id = store.add_proposal(self.conn, kind, json.dumps(result, ensure_ascii=False), now)
+        result.update(proposal_id=proposal_id, calendar_write=self.write_enabled())
+        days = list(dict.fromkeys(s["weekday"] for s in result["sessions"]))
+        result["questions"] = ([tr(lang, "q_unlisted", days=join_and(lang, days))] if kind == WEEK and days else []) \
+            + [tr(lang, "q_validate", id=proposal_id)]
+        result["text"] = self._render_plan(result, lang, tr(lang, head, id=proposal_id, n=len(result["sessions"])),
+                                           show_reasons)
+        result["ok"] = True
+        return result
+
+    @staticmethod
+    def _render_plan(r: dict, lang: str, head: str, show_reasons: bool) -> str:
+        def cap(text: str) -> str:
+            return text[:1].upper() + text[1:]
+
+        lines = [head, ""]
+        by_day: dict[str, list[dict]] = {}
+        for s in r["sessions"]:
+            by_day.setdefault(s["day"], []).append(s)
+        for day, items in by_day.items():
+            lines.append(f"{items[0]['weekday']} {date.fromisoformat(day):%d/%m}")
+            for s in items:
+                start, end = datetime.fromisoformat(s["start"]), datetime.fromisoformat(s["end"])
+                lines.append(f"  {start:%H:%M}-{end:%H:%M} {cap(s['kind'])}")
+                if show_reasons:
+                    lines += [f"     - {x}" for x in s["reasons"]]
+        if r.get("activities"):
+            lines += ["", tr(lang, "week_why")]
+            for a in r["activities"]:
+                line = tr(lang, "week_each", name=cap(a["activity"]), got=a["placed"], wanted=a["wanted"])
+                if a["mode"] == "daily":
+                    start, end = a["window"].split("-")
+                    line += tr(lang, "week_daily", per=a["per_day"], real=a["minutes"]["activity"], start=start,
+                               end=end, pause=a["pause_minutes"])
+                lines.append(line)
+                if a["mode"] == "count":
+                    for s in (x for x in r["sessions"] if x["kind"] == a["activity"]):
+                        lines.append(f"  {s['weekday']} {date.fromisoformat(s['day']):%d/%m}")
+                        lines += [f"     - {x}" for x in s["reasons"]]
+                        lines += [f"     ! {x}" for x in s["notes"]]
+            missing = sum(a["missing"] for a in r["activities"])
+            if missing:
+                lines += ["", tr(lang, "prop_missing", n=missing)]
+        if r["rejected"]:
+            lines += ["", tr(lang, "prop_rejected")] + [
+                f"  - [{cap(x['kind'])}] {x['reason']}" if r.get("activities") and x.get("kind") else f"  - {x['reason']}"
+                for x in r["rejected"][:8]]
+        lines += [f"! {w}" for w in r.get("warnings", [])]
+        lines += ["", tr(lang, "prop_before")] + [f"  - {q}" for q in r["questions"]]
+        lines.append(tr(lang, "prop_writes_on" if r["calendar_write"] else "prop_writes_off", id=r["proposal_id"]))
+        return "\n".join(lines)
+
     # --- writing, only after a yes --------------------------------------------------------------------------
     def confirm(self, proposal_id: int, days: str = "") -> dict:
         lang, profile, now = self.lang(), self.profile(), self.now()
@@ -208,20 +393,22 @@ class AgendaMixin:
         if not sessions:
             raise UserError(tr(lang, "confirm_nothing"))
         written, skipped, lines = [], [], []
+        days_of = [date.fromisoformat(s["day"]) for s in sessions]
+        try:  # the slots are read again, once for the whole range: a week is not twenty calendar calls
+            current, _ = sources.fetch_range(profile, min(days_of), max(days_of), self.home, run=self._run,
+                                             urlopen=self._urlopen)
+        except sources.SourceError as exc:
+            raise UserError(tr(lang, "propose_unreadable", why=exc))
         for s in sessions:
             b0, b1 = datetime.fromisoformat(s["block_start"]), datetime.fromisoformat(s["block_end"])
-            try:
-                current, _ = sources.fetch_range(profile, b0.date(), b0.date(), self.home, run=self._run,
-                                                 urlopen=self._urlopen)
-            except sources.SourceError as exc:
-                raise UserError(tr(lang, "propose_unreadable", why=exc))
             clash = [e for e in current if not e.all_day and e.start < b1 and e.end > b0]
             if clash:
                 skipped.append({"day": s["day"], "why": tr(lang, "confirm_clash", day=s["weekday"],
                                                            title=clash[0].title)})
                 continue
             group = store.new_group(self.conn)
-            parts = self._parts(s, kind, proposal["kind"], lang)
+            name = s.get("kind") or proposal["kind"]  # a week or a staged plan holds several activities
+            parts = self._parts(s, kind, name, lang)
             made = []
             for part, summary, start, end in parts:
                 try:
@@ -234,12 +421,14 @@ class AgendaMixin:
                     break
                 store.record_written(self.conn, {
                     "event_id": event_id, "calendar_id": "primary", "group_id": group, "proposal_id": proposal_id,
-                    "kind": proposal["kind"], "part": part, "summary": summary, "start": start.isoformat(),
+                    "kind": name, "part": part, "summary": summary, "start": start.isoformat(),
                     "end": end.isoformat(), "link": link}, now)
                 made.append({"part": part, "summary": summary, "link": link})
             if made:
+                if proposal["kind"] == STAGED:  # a fixed block the user described: no "how long did it take"
+                    store.mark_notified(self.conn, f"logged:{group}", now)
                 written.append({"group": group, "day": s["day"], "events": made})
-                lines.append(tr(lang, "confirm_line", group=group, day=s["weekday"], date=f"{b0:%d/%m}",
+                lines.append(tr(lang, "confirm_line", group=group, kind=name, day=s["weekday"], date=f"{b0:%d/%m}",
                                 block=f"{b0:%H:%M}-{b1:%H:%M}", n=len(made), link=made[0]["link"]))
         store.set_proposal_status(self.conn, proposal_id, "written" if written and not skipped else
                                   ("partial" if written else "failed"))

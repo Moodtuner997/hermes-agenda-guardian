@@ -18,8 +18,12 @@ ni un agenda particulier.
 - Tout texte affiché reste explicable : un bloc dit d'où il vient (estimation, facteur de calibrage, échéance,
   règle) ; une règle non posée par l'utilisateur est marquée « default ».
 - Un calendrier illisible ou absent donne un avertissement visible, jamais un jour vide silencieux.
-- Chaque modification passe `python -m pytest tests -q` (92 tests), `hermes plugins validate .`, puis, si le cron ou
-  le tableau de bord bougent, `tests/e2e_hermes.py` avec l'interpréteur de Hermes.
+- Un seul chemin d'écriture : tout ce qui s'écrit passe par une proposition (`day_propose`, `day_week_plan` ou
+  `day_stage`, un plan composé par l'agent) puis `day_confirm`. La consigne système interdit tout autre outil
+  d'agenda ; le plugin ne peut pas le bloquer (voir Pièges).
+- Chaque modification passe `python -m pytest tests -q` (103 tests), `hermes plugins validate .`, puis, si le cron,
+  le tableau de bord, un outil ou le hook bougent, `tests/e2e_hermes.py` avec l'interpréteur de Hermes (dans un
+  `HERMES_HOME` jetable : un dossier avec `config.yaml` qui active le plugin et une copie du plugin).
 - README, PR et textes publics en anglais ; commits en français, format conventionnel.
 - Jamais de données réelles dans le dépôt : la démo vient de `tests/make_demo_profile.py` (noms inventés).
 - `platforms:` du catalogue = ce qui est réellement testé (Windows 11 et Linux arm64 ; macOS non testé).
@@ -46,5 +50,13 @@ ni un agenda particulier.
 - Prouvé sur un compte Google réel (A1, 2026-11-06) : lecture de huit semaines, puis écriture de trois événements
   marqués, relecture et suppression par `undo` ; agenda identique avant et après (empreinte des identifiants),
   interrupteur remis sur off. Les tests unitaires restent sur `tests/fakegoogle.py`, qui enregistre chaque appel.
-- Non prouvé : outils et consigne chargés par l'agent réel (la passerelle de l'A1 tourne encore en 0.2.0), question de
-  durée envoyée par le cron, livraison Telegram/WhatsApp, macOS.
+- Vu en vrai (Telegram, A1, 2026-11-06, 0.3.0) : `/day <phrase>` renvoyait « commande inconnue » et toute l'aide ;
+  l'agent, sans fiche pour les appels et la formation, a composé le planning à la main puis a écrit 19 événements
+  par le skill Google, sans marque : `/day undo` ne les voit pas. D'où 0.4.0 : le hook `pre_gateway_dispatch`
+  (`_plain_words` dans `__init__.py`) réécrit `/day <phrase>` en message normal ; `commands.KNOWN` liste les
+  commandes du dispatcher (un test vérifie que chacune y est, à tenir à jour) ; `day_week_plan` place plusieurs
+  activités d'un coup (`proposer.fill_days` pour « N par jour ») ; `day_stage` enregistre les blocs que l'agent
+  compose ; une habitude absente depuis 3 semaines est jugée finie (`DayStat.over`).
+- Non prouvé : la 0.4.0 sur Telegram (hook de réécriture sur une vraie passerelle, agent qui appelle
+  `day_week_plan` au lieu d'écrire à la main), question de durée envoyée par le cron, livraison
+  Telegram/WhatsApp, macOS.

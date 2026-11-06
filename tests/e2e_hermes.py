@@ -62,6 +62,29 @@ check("day_propose answers with reasons and says nothing was written",
 blocked = tool("day_confirm", {"proposal_id": proposal.get("proposal_id", 1)})
 check("day_confirm is refused until the user typed /day write on",
       blocked.get("ok") is False and "write on" in blocked.get("error", ""), json.dumps(blocked)[:300])
+plan_week = tool("day_week_plan", {"from_day": "2026-11-09", "to_day": "2026-11-11", "activities": [
+    {"name": "calls", "minutes": 90, "sessions": 1, "window": "09:00-12:00"},
+    {"name": "course", "minutes": 60, "per_day": 1, "window": "13:00-18:00", "days": "tue"}]})
+check("day_week_plan places two activities in one call and writes nothing",
+      plan_week.get("ok") is True and {s["kind"] for s in plan_week.get("sessions", [])} == {"calls", "course"}
+      and "Nothing is written" in plan_week.get("text", ""), json.dumps(plan_week)[:400])
+staged = tool("day_stage", {"blocks": [{"title": "Choir", "day": "2026-11-10", "start": "19:00", "end": "20:00"}]})
+check("day_stage registers a composed block as a proposal", staged.get("ok") is True
+      and staged.get("proposal_id") and "Choir" in staged.get("text", ""), json.dumps(staged)[:300])
+blocked = tool("day_confirm", {"proposal_id": staged.get("proposal_id", 1)})
+check("a staged block is refused too until the user typed /day write on",
+      blocked.get("ok") is False and "write on" in blocked.get("error", ""), json.dumps(blocked)[:300])
+from types import SimpleNamespace  # noqa: E402
+
+from hermes_cli.lifecycle import invoke_hook  # noqa: E402
+
+said = invoke_hook("pre_gateway_dispatch", event=SimpleNamespace(text="/day place two sport sessions in my week"),
+                   gateway=None, session_store=None)
+check("the gateway hook hands a /day sentence to the agent", len(said) == 1 and said[0].get("action") == "rewrite"
+      and said[0].get("text", "").endswith("place two sport sessions in my week"), json.dumps(said)[:300])
+check("the gateway hook leaves a command alone",
+      invoke_hook("pre_gateway_dispatch", event=SimpleNamespace(text="/day plan tomorrow"), gateway=None,
+                  session_store=None) == [])
 week = tool("day_week", {"week_of": "2026-11-09"})
 check("day_week reads the week", week.get("ok") is True and week.get("week_start") == "2026-11-09"
       and len(week.get("proposed", [])) >= 1, json.dumps(week)[:300])

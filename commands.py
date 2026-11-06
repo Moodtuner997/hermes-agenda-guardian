@@ -10,6 +10,18 @@ from .texts import tr
 
 _DURATION = re.compile(r"^\d+(h(\d+)?|m|min)?$|^\d+h\d*m?$", re.I)
 
+KNOWN = frozenset({
+    "help", "setup", "set", "add", "list", "ls", "tasks", "plan", "now", "done", "drop", "rm", "brief", "nudge",
+    "kind", "habit", "propose", "ok", "confirm", "undo", "took", "write", "cron"})
+
+
+def free_text(raw: str) -> str:
+    """What follows /day when it is a sentence, not a command: the request to hand to the agent (else "")."""
+    words = (raw or "").split()
+    if len(words) < 2 or words[0].lower().lstrip("-") in KNOWN:
+        return ""
+    return " ".join(words)
+
 
 def _tokens(raw: str, lang: str) -> list[str]:
     try:
@@ -101,8 +113,10 @@ def run(guardian: Guardian, raw: str) -> str:
     try:
         lang = guardian.lang()
         tokens = _tokens(raw or "", lang)
-        if not tokens or tokens[0] in ("help", "-h", "--help"):
+        if not tokens:
             return tr(lang, "help")
+        if tokens[0] in ("help", "-h", "--help"):
+            return tr(lang, "help_full")
         command, args = tokens[0].lower(), tokens[1:]
         if command == "setup":
             return guardian.setup_auto() if args and args[0].lower() == "auto" else guardian.setup_text()
@@ -170,6 +184,6 @@ def run(guardian: Guardian, raw: str) -> str:
             if action == "status":
                 return guardian.schedule_status()
             raise UserError(tr(lang, "cron_usage"))
-        return tr(lang, "unknown_cmd", command=command) + "\n" + tr(lang, "help")
+        return tr(lang, "unknown_cmd", command=command)
     except UserError as exc:
         return f"! {exc}"

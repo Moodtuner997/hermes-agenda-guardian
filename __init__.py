@@ -1,8 +1,10 @@
 """agenda-guardian: a deterministic day planner for Hermes.
 
 Plans from the durations you estimate, corrected by the durations you actually took, around the meetings
-of any calendar source, inside rules you wrote down yourself. It never writes to a calendar and never calls
-a model: ``/day`` (slash), ``hermes guardian`` (CLI) and five tools for the agent share one core.
+of any calendar source, inside rules you wrote down yourself. It also fits activities (sport, a long call) into
+the week with reasons drawn from the calendar's history, and writes to a Google calendar only when the user
+typed ``/day write on`` and said yes, removing only what it wrote. It never calls a model: ``/day`` (slash),
+``hermes guardian`` (CLI) and thirteen tools for the agent share one core.
 """
 
 from __future__ import annotations

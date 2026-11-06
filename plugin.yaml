@@ -1,18 +1,19 @@
 name: agenda-guardian
 label: Agenda Guardian
 kind: standalone
-version: "0.2.0"
+version: "0.3.0"
 manifest_version: 2
 author: Moodtuner997
 homepage: https://github.com/Moodtuner997/hermes-agenda-guardian
 description: >
-  A day planner for people whose discipline cannot be the plan. You write your rules once (work hours,
-  protected time, focus window, longest stretch, tasks per day), estimate each task, and report the real time
-  when it is done: from the third finished task of a kind, the planner corrects your estimates by your own
-  median error and says so. It places tasks in the free time around the meetings of any calendar source
-  (Google Workspace skill, ICS file or URL, JSON file, or any command that prints event JSON), and every
-  block states the rule it comes from. A full day says what does not fit. Deterministic, no model call,
-  never writes to a calendar.
+  A day and week planner for people whose discipline cannot be the plan. You write your rules once and
+  estimate each task; from the third finished task of a kind, the planner corrects your estimates by your own
+  median error. It places tasks in the free time around the meetings of any calendar source (Google Workspace
+  skill, ICS file or URL, JSON file, or any command that prints event JSON) and every block states its reason.
+  Activities such as sport get a sheet (real length, time before and after, when it fits) and a proposal that
+  explains itself from eight weeks of your calendar history. Reads your calendar by default. Writing to a
+  Google calendar is off until you type /day write on; then it adds events marked as its own, only after you
+  say yes, and removes only those. Deterministic, no model call.
 requires_hermes: ">=0.22.7"
 provides_tools:
   - day_setup

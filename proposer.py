@@ -81,15 +81,18 @@ def propose(kind: Kind, factor: tuple[float, int], count: int, first: date, last
             seen = _titles(timed, *full_window)
             if habit:
                 text = tr(lang, "rej_habit", day=name, label=habit["label"], start=habit["start"], end=habit["end"])
+                short = habit["label"]
             elif seen:
                 text = tr(lang, "rej_busy", day=name, events=seen)
+                short = next(e.title for e in sorted(timed, key=lambda e: e.start) if _overlap(e, *full_window) > 0)
             else:
                 text = tr(lang, "rej_small", day=name, total=total)
-            rejected.append({"day": current.isoformat(), "reason": text})
+                short = tr(lang, "short_small")
+            rejected.append({"day": current.isoformat(), "weekday": name, "short": short, "reason": text})
             continue
         usual = (not history.thin and stat.taken >= MIN_TAKEN and stat.share >= USUAL_SHARE)
         if usual and not force_days:
-            rejected.append({"day": current.isoformat(), "reason": tr(
+            rejected.append({"day": current.isoformat(), "weekday": name, "short": stat.example, "reason": tr(
                 lang, "rej_usual", day=name, taken=stat.taken, weeks=stat.weeks, example=stat.example,
                 start=kind.win[0], end=kind.win[1])})
             continue

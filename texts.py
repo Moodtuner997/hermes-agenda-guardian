@@ -318,6 +318,13 @@ def day_name(lang: str, weekday: int) -> str:
     return _DAYS["fr" if lang == "fr" else "en"][weekday - 1]
 
 
+def join_and(lang: str, items: list[str]) -> str:
+    """'a, b et c' (fr) / 'a, b and c' (en)."""
+    if len(items) <= 1:
+        return "".join(items)
+    return ", ".join(items[:-1]) + (" et " if lang == "fr" else " and ") + items[-1]
+
+
 def hm(minutes: int) -> str:
     return f"{minutes // 60}h{minutes % 60:02d}" if minutes >= 60 else f"{minutes} min"
 

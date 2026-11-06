@@ -136,7 +136,7 @@ def _day(text: Any, g: Guardian) -> Any:
 
 
 def _t_kind(g: Guardian, a: dict) -> dict:
-    action = str(a.get("action", "list")).lower()
+    action = str(a.get("action") or ("set" if a.get("real_minutes") is not None else "list")).lower()
     if action == "list":
         return g.kinds_view()
     if action == "remove":

@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta
 
 from . import history, kinds as kindmod, planner, profile as prof, proposer, sources, store, writer
 from .model import UserError
-from .texts import day_name, tr
+from .texts import day_name, join_and, tr
 
 PROPOSAL_LIFETIME = timedelta(hours=24)
 HISTORY_WEEKS = history.WEEKS
@@ -147,7 +147,7 @@ class AgendaMixin:
     def _questions(self, result: dict, lang: str) -> list[str]:
         out = []
         if result["sessions"]:
-            names = ", ".join(s["weekday"] for s in result["sessions"])
+            names = join_and(lang, [s["weekday"] for s in result["sessions"]])
             out.append(tr(lang, "q_unlisted", days=names))
         out.append(tr(lang, "q_validate", id=result["proposal_id"]))
         return out
@@ -155,7 +155,13 @@ class AgendaMixin:
     def _render_proposal(self, r: dict, lang: str) -> str:
         head = tr(lang, "prop_head", id=r["proposal_id"], kind=r["kind"], n=len(r["sessions"]), wanted=r["wanted"])
         lines = [head, ""]
-        if not r["sessions"]:
+        if r["sessions"]:
+            brief = tr(lang, "prop_brief", chosen=join_and(lang, [s["weekday"] for s in r["sessions"]]))
+            if r["rejected"]:
+                brief += " " + tr(lang, "prop_brief_out", rejected=join_and(
+                    lang, [f"{x['weekday']} ({x['short']})" for x in r["rejected"]]))
+            lines += [brief, ""]
+        else:
             lines.append(tr(lang, "prop_none"))
         for index, s in enumerate(r["sessions"], 1):
             b0, st, en, b1 = (datetime.fromisoformat(s[k]) for k in ("block_start", "start", "end", "block_end"))

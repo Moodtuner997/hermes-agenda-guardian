@@ -179,3 +179,17 @@ def test_no_tool_can_switch_calendar_writing_on(tmp_path, monkeypatch):
     blocked = call("day_confirm", {"proposal_id": 1})
     assert blocked["ok"] is False and "write on" in blocked["error"]
     assert "Writing is off" in ctx.commands["day"]("write status")
+
+
+def test_day_kind_saves_when_given_numbers_without_an_action(tmp_path, monkeypatch):
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    ctx = Ctx()
+    agenda_guardian.register(ctx)
+    call = lambda name, args: json.loads(ctx.tools[name](args))
+    saved = call("day_kind", {"name": "sport", "real_minutes": 120, "before_minutes": 15, "after_minutes": 30,
+                              "window": "18:00-22:00", "days": "mon,thu"})
+    assert saved["ok"] and saved["kind"]["name"] == "sport" and saved["kind"]["weekdays"] == [1, 4]
+    assert [k["name"] for k in call("day_kind", {})["kinds"]] == ["sport"]
+    assert call("day_kind", {"name": "sport"})["kinds"][0]["real_minutes"] == 120  # no numbers: it is a lookup
+    assert call("day_kind", {"action": "remove", "name": "sport"})["ok"]
+    assert call("day_kind", {"action": "set", "name": "sport"})["ok"] is False  # numbers are never guessed

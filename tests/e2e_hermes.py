@@ -45,7 +45,7 @@ work = Path(tempfile.mkdtemp(prefix="day-e2e-"))
 (work / "cal.json").write_text(json.dumps([{"summary": "Client call", "start": "2026-11-09T10:30:00",
                                             "end": "2026-11-09T11:00:00"}]), encoding="utf-8")
 
-print(slash(f"set work_hours=09:00-17:30 calendar=file:{work / 'cal.json'}"))
+print(slash(f"set language=en work_hours=09:00-17:30 calendar=file:{work / 'cal.json'}"))  # the checks read English
 added = tool("day_add_task", {"name": "Write the quote", "minutes": 45, "priority": 1})
 check("day_add_task answers through the registry", added.get("ok") is True, json.dumps(added)[:200])
 plan = tool("day_plan", {"day": "2026-11-09"})

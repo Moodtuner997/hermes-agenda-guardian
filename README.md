@@ -14,7 +14,7 @@ who plans more than the day allows.
 - Any calendar: the Google Workspace skill, an ICS file or URL (Outlook, Apple, Google), a JSON file, or any
   command that prints event JSON.
 - It never writes to a calendar.
-- Works from the `/day` slash command, `hermes day` on the command line, six agent tools (so the onboarding can
+- Works from the `/day` slash command, `hermes guardian` on the command line (not `hermes day`: the day-panel plugin already uses that name), six agent tools (so the onboarding can
   happen in a chat, including from a phone) and a **Today** tab in the dashboard.
 
 ## Quick start
@@ -39,7 +39,7 @@ Then, in a chat:
 
 ## What a plan looks like
 
-Output of `hermes day plan tomorrow` on an invented profile (`tests/make_demo_profile.py`), shortened with `...`:
+Output of `hermes guardian plan tomorrow` on an invented profile (`tests/make_demo_profile.py`), shortened with `...`:
 
 ```
 Plan for Fri 2026-11-06

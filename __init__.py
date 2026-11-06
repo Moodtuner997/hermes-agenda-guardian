@@ -2,7 +2,7 @@
 
 Plans from the durations you estimate, corrected by the durations you actually took, around the meetings
 of any calendar source, inside rules you wrote down yourself. It never writes to a calendar and never calls
-a model: ``/day`` (slash), ``hermes day`` (CLI) and five tools for the agent share one core.
+a model: ``/day`` (slash), ``hermes guardian`` (CLI) and five tools for the agent share one core.
 """
 
 from __future__ import annotations
@@ -179,7 +179,7 @@ def register(ctx: Any) -> None:
     _CTX = ctx
     ctx.register_command("day", _slash, description="Plan your day from your rules, estimates and calendar",
                          args_hint="setup | set | add | plan | now | done | brief")
-    ctx.register_cli_command("day", "Plan your day from your rules, estimates and calendar", _cli_setup, _cli_run)
+    ctx.register_cli_command("guardian", "Plan your day from your rules, estimates and calendar", _cli_setup, _cli_run)
     for name, fn, schema in _TOOLS:
         ctx.register_tool(name=name, toolset="agenda-guardian", schema=schema, handler=_tool(fn),
                           description=schema["description"], emoji="🗓")

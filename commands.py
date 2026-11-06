@@ -1,4 +1,4 @@
-"""The /day slash command and the `hermes day` CLI: text in, text out."""
+"""The /day slash command and the `hermes guardian` CLI: text in, text out."""
 
 from __future__ import annotations
 

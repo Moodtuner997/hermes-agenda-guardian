@@ -28,6 +28,7 @@ class Session:
     reasons: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     share: float = 0.0
+    spare: dict | None = None  # set when the day is usually taken but free this time: said if it is not chosen
 
     def to_dict(self, lang: str) -> dict:
         return {"day": self.day.isoformat(), "weekday": day_name(lang, self.day.isoweekday()),
@@ -120,12 +121,7 @@ def propose(kind: Kind, factor: tuple[float, int], count: int, first: date, last
             continue
         usual = (not history.thin and stat.taken >= MIN_TAKEN and stat.share >= USUAL_SHARE)
         over = usual and stat.over  # it was a habit, it has not happened for weeks: keep the day, say so
-        usual = usual and not over
-        if usual and not force_days:
-            rejected.append({"day": current.isoformat(), "weekday": name, "short": stat.example, "reason": tr(
-                lang, "rej_usual", day=name, taken=stat.taken, weeks=stat.weeks, example=stat.example,
-                start=kind.win[0], end=kind.win[1])})
-            continue
+        usual = usual and not over  # a day the history calls busy but THIS week's calendar leaves free is kept, last
         gap = gaps[0]
         block_start = gap[0]
         start = block_start + timedelta(minutes=kind.before_min)
@@ -140,8 +136,9 @@ def propose(kind: Kind, factor: tuple[float, int], count: int, first: date, last
             reasons.append(tr(lang, "r_hist_over", taken=stat.taken, weeks=stat.weeks, day=name, start=kind.win[0],
                               end=kind.win[1], recent=RECENT_WEEKS, ago=stat.ago, example=stat.example))
         else:
-            reasons.append(tr(lang, "r_hist_forced" if usual else "r_hist_some", taken=stat.taken, weeks=stat.weeks,
-                              day=name, example=stat.example, start=kind.win[0], end=kind.win[1]))
+            reasons.append(tr(lang, ("r_hist_forced" if force_days else "r_hist_usual_free") if usual else "r_hist_some",
+                              taken=stat.taken, weeks=stat.weeks, day=name, example=stat.example, start=kind.win[0],
+                              end=kind.win[1]))
         if not history.thin:
             reasons.append(tr(lang, "r_load_" + history.load_word(weekday), day=name,
                               hours=hm(int(round(stat.load_min)))))
@@ -150,9 +147,12 @@ def propose(kind: Kind, factor: tuple[float, int], count: int, first: date, last
             reasons.append(tr(lang, "r_pad", before=kind.before_min, after=kind.after_min))
         notes = [tr(lang, "n_allday", title=e.title) for e in day_events if e.all_day][:2]
         if usual:
-            notes.append(tr(lang, "n_usual", taken=stat.taken, weeks=stat.weeks))
+            notes.append(tr(lang, "n_usual" if force_days else "n_usual_free", taken=stat.taken, weeks=stat.weeks))
+        spare = {"day": current.isoformat(), "weekday": name, "short": stat.example, "reason": tr(
+            lang, "rej_usual", day=name, taken=stat.taken, weeks=stat.weeks, example=stat.example, start=kind.win[0],
+            end=kind.win[1])} if usual and not force_days else None
         pool.append(Session(current, start, end, block_start, block_end, reasons, notes,
-                            0.0 if over else stat.share))
+                            0.0 if over else stat.share, spare))
 
     chosen: list[Session] = []
 
@@ -166,6 +166,7 @@ def propose(kind: Kind, factor: tuple[float, int], count: int, first: date, last
     pick(2)
     spread = len(chosen)
     pick(1)
+    rejected += [s.spare for s in pool if s.spare and s not in chosen]
     chosen.sort(key=lambda s: s.day)
     for session in chosen:
         others = [abs((session.day - o.day).days) for o in chosen if o is not session]

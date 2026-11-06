@@ -50,7 +50,8 @@ def test_french_session_end_to_end_speaks_french(make_guardian):
     assert "pour le 2026-11-10" in plan and "Règles appliquées" in plan
     assert commands.run(g, "done 9 20").startswith("! aucune tâche ouverte n°9")
     assert "Terminé n°1" in commands.run(g, "done 1 1h")
-    assert commands.run(g, "help").startswith("/day setup [auto]") and "les réglages" in commands.run(g, "help")
+    assert commands.run(g, "help").startswith("Dis-moi simplement") and "/day set " not in commands.run(g, "help")
+    assert "les réglages" in commands.run(g, "help all")
 
 
 def test_french_words_are_accepted_for_days_and_durations():

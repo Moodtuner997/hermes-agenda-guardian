@@ -72,15 +72,13 @@ EN = {
     "unknown_cmd": "I do not know the command '{command}'. To ask in plain words, write it without /day (for example: "
                    "fit 3 sport sessions in my week). /day help lists the commands.",
     "nothing_now": "(nothing to say right now)",
-    "help": """Say what you want in plain words, with or without /day: "fit 3 sport sessions in my week", "what is my day?".
-Shortcuts:
-/day plan [tomorrow]         the plan of a day, each block with its reason
-/day add "name" 45m          a task with YOUR estimate
-/day done <# or name> <min>  log the real time (this calibrates the plan)
-/day write on|off            allow or forbid writing to your calendar (you type this)
-/day undo                    take back what this plugin wrote, nothing else
-/day help                    every command""",
-    "help_full": """/day setup [auto]                  the rules to answer (work hours, focus, durations, calendar); auto adopts what Hermes already knows
+    "help": """Just tell me what you want, in your own words, with or without /day: "put 3 sport sessions, 2 client calls in the morning and 2 hours of course a day in my week", "what is my day tomorrow?", "the walk took me 1h30". I show the plan with my reasons and write nothing to your calendar before your yes.
+Two commands you type yourself:
+/day write on|off   allow or forbid writing to your calendar
+/day undo           take back what I wrote, nothing else
+(/day help all lists every command.)""",
+    "help_full": """Every command (you never need them: say it in words instead):
+/day setup [auto]                  the rules to answer (work hours, focus, durations, calendar); auto adopts what Hermes already knows
 /day set key=value ...             answer them, e.g. /day set work_hours=09:00-17:30 calendar=google
 /day add "name" 45m [cat=admin] [p=1] [due=fri]   a task with YOUR estimate
 /day list                          open tasks
@@ -156,7 +154,9 @@ Shortcuts:
     "auto_skip_cal": "Calendar not adopted: {why}",
     "agent_hint": "For the agent: before asking the user anything, use what you already know of them (memory, "
                   "profile notes, existing reminders, connected calendar) to propose each answer, then ask only to "
-                  "confirm or complete. Speak the user's language. Save answers with the 'settings' argument.",
+                  "confirm or complete. Speak the user's language, in plain sentences: never show the key=value "
+                  "names or any command syntax, and turn loose answers (9h30, from 9 to 7, lunch around 1) into the "
+                  "settings yourself. Save answers with the 'settings' argument.",
     "unnamed": "(unnamed)",
     "found_google_nosignin": "[!!] Google Calendar: the google-workspace skill is installed but not signed in yet "
                              "(run its own setup first)",
@@ -232,15 +232,13 @@ FR = {
     "unknown_cmd": "Je ne connais pas la commande « {command} ». Pour demander en mots simples, écris ta demande sans /day "
                    "(par exemple : place 3 séances de sport dans ma semaine). /day help liste les commandes.",
     "nothing_now": "(rien à dire pour l'instant)",
-    "help": """Dis ce que tu veux en mots simples, avec ou sans /day : « place 3 séances de sport dans ma semaine », « c'est quoi ma journée ? ».
-Raccourcis :
-/day plan [demain]           le plan d'une journée, chaque bloc avec sa raison
-/day add "nom" 45m           une tâche avec TON estimation
-/day done <n° ou nom> <min>  noter le temps réel (c'est ce qui calibre le plan)
-/day write on|off            autoriser ou interdire l'écriture dans ton agenda (tu le tapes toi-même)
-/day undo                    retirer ce que ce plugin a écrit, jamais autre chose
-/day help                    toutes les commandes""",
-    "help_full": """/day setup [auto]                  les réglages à faire (horaires, concentration, durées, agenda) ; auto reprend ce que Hermes sait déjà
+    "help": """Dis-moi simplement ce que tu veux, avec tes mots, avec ou sans /day : « mets 3 séances de sport, 2 appels clients le matin et 2 h de cours par jour dans ma semaine », « c'est quoi ma journée demain ? », « la promenade m'a pris 1h30 ». Je te montre le plan avec mes raisons et je n'écris rien dans ton agenda avant ton oui.
+Deux commandes que tu tapes toi-même :
+/day write on|off   autoriser ou interdire l'écriture dans ton agenda
+/day undo           retirer ce que j'ai écrit, jamais autre chose
+(/day help all liste toutes les commandes.)""",
+    "help_full": """Toutes les commandes (tu n'en as jamais besoin : dis-le plutôt avec des mots) :
+/day setup [auto]                  les réglages à faire (horaires, concentration, durées, agenda) ; auto reprend ce que Hermes sait déjà
 /day set clé=valeur ...            les régler, ex. /day set work_hours=09:00-17:30 calendar=google
 /day add "nom" 45m [cat=admin] [p=1] [due=ven]   une tâche avec TON estimation
 /day list                          les tâches ouvertes

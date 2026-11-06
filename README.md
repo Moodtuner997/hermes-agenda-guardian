@@ -109,11 +109,11 @@ a dinner most Tuesdays, a family dinner the plugin was told about on Wednesdays)
 ```
 Proposal #1: sport, 2 of 2 session(s). Nothing is written to your calendar.
 
-In short: Monday and Thursday, evenings your calendar and its history show as free. Left out: Tuesday (Dinner with Sam) and Wednesday (family dinner).
+In short: Monday and Thursday, slots your calendar and its history show as free. Left out: Tuesday (Dinner with Sam) and Wednesday (family dinner).
 
 1. Monday 09/11: 18:00-20:45 -> sport 18:15-20:15
      - Your calendar is free on Monday from 18:00 to 22:00.
-     - History: Monday evenings between 18:00 and 22:00 were free 8 weeks out of 8.
+     - History: Mondays between 18:00 and 22:00 were free 8 weeks out of 8.
      - Mondays are usually a heavy day (about 10h00 of events).
      - Length 120 min as you said (not measured yet: tell me how long it really takes).
      - 15 min before and 30 min after are kept free too.
@@ -124,7 +124,7 @@ Days I left out, and why
   - Wednesday: you told me 'family dinner' (18:00-21:00).
 
 Before you validate
-  - Is anything planned on Monday and Thursday evenings that is not in your calendar?
+  - Is anything planned on Monday and Thursday at those times that is not in your calendar?
   - Do you want me to write this to your calendar? (nothing is written until you say yes: /day ok 1)
 ```
 

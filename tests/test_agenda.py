@@ -281,3 +281,14 @@ def store_factors(g):
     from agenda_guardian import store
 
     return store.factors(g.conn)
+
+
+def test_a_day_the_user_forces_is_kept_and_the_reason_says_so(world):
+    """Tuesday is usually taken (5 of 8 weeks): left out on its own, kept when the user asks for it explicitly."""
+    g, _ = world
+    forced = g.propose("sport", 1, days="mar")
+    session = forced["sessions"][0]
+    assert session["day"] == "2026-11-10"
+    text = " ".join(session["reasons"])
+    assert "tu as demandé ce jour" in text and "moins de la moitié" not in text
+    assert session["notes"] and "tu l'as demandé explicitement" in session["notes"][0]

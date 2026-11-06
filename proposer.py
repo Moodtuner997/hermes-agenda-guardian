@@ -107,8 +107,8 @@ def propose(kind: Kind, factor: tuple[float, int], count: int, first: date, last
         elif stat.taken == 0:
             reasons.append(tr(lang, "r_hist_free", weeks=stat.weeks, day=name, start=kind.win[0], end=kind.win[1]))
         else:
-            reasons.append(tr(lang, "r_hist_some", taken=stat.taken, weeks=stat.weeks, day=name,
-                              example=stat.example, start=kind.win[0], end=kind.win[1]))
+            reasons.append(tr(lang, "r_hist_forced" if usual else "r_hist_some", taken=stat.taken, weeks=stat.weeks,
+                              day=name, example=stat.example, start=kind.win[0], end=kind.win[1]))
         if not history.thin:
             reasons.append(tr(lang, "r_load_" + history.load_word(weekday), day=name,
                               hours=hm(int(round(stat.load_min)))))

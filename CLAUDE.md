@@ -18,7 +18,7 @@ ni un agenda particulier.
 - Tout texte affiché reste explicable : un bloc dit d'où il vient (estimation, facteur de calibrage, échéance,
   règle) ; une règle non posée par l'utilisateur est marquée « default ».
 - Un calendrier illisible ou absent donne un avertissement visible, jamais un jour vide silencieux.
-- Chaque modification passe `python -m pytest tests -q` (90 tests), `hermes plugins validate .`, puis, si le cron ou
+- Chaque modification passe `python -m pytest tests -q` (92 tests), `hermes plugins validate .`, puis, si le cron ou
   le tableau de bord bougent, `tests/e2e_hermes.py` avec l'interpréteur de Hermes.
 - README, PR et textes publics en anglais ; commits en français, format conventionnel.
 - Jamais de données réelles dans le dépôt : la démo vient de `tests/make_demo_profile.py` (noms inventés).
@@ -43,5 +43,8 @@ ni un agenda particulier.
 - Le script Google n'a ni `update` ni champ privé : le marqueur vit dans la description de l'événement, et déplacer une
   séance = `undo` puis nouvelle proposition. Aucun outil d'agent n'active l'écriture (test
   `test_no_tool_can_switch_calendar_writing_on`) : ne jamais en ajouter un.
-- Non prouvé : compte Google réel, lecture comme écriture (testées sur l'argv et le format de sortie du script avec
-  `tests/fakegoogle.py`, qui enregistre chaque appel), livraison Telegram/WhatsApp, macOS.
+- Prouvé sur un compte Google réel (A1, 2026-11-06) : lecture de huit semaines, puis écriture de trois événements
+  marqués, relecture et suppression par `undo` ; agenda identique avant et après (empreinte des identifiants),
+  interrupteur remis sur off. Les tests unitaires restent sur `tests/fakegoogle.py`, qui enregistre chaque appel.
+- Non prouvé : outils et consigne chargés par l'agent réel (la passerelle de l'A1 tourne encore en 0.2.0), question de
+  durée envoyée par le cron, livraison Telegram/WhatsApp, macOS.

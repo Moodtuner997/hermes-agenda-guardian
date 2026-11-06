@@ -302,8 +302,11 @@ class AgendaMixin:
         if not 1 <= minutes <= 960:
             raise UserError(tr(lang, "done_range"))
         planned = int((datetime.fromisoformat(row["end"]) - datetime.fromisoformat(row["start"])).total_seconds() // 60)
+        sheet = store.get_kind(self.conn, row["kind"])
         category = kindmod.category(row["kind"])
-        store.log_sample(self.conn, category, planned, minutes, now)
+        # The ratio is measured against what the user SAID, not against the length that was written (already
+        # corrected): otherwise a correct correction would pull its own factor back towards 1.
+        store.log_sample(self.conn, category, sheet.real_min if sheet else planned, minutes, now)
         store.mark_notified(self.conn, f"logged:{row['group_id']}", now)
         factor, count = store.factors(self.conn).get(category, (1.0, 1))
         calib = (tr(lang, "took_start", n=count, need=store.MIN_SAMPLES) if count < store.MIN_SAMPLES

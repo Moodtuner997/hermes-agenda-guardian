@@ -259,3 +259,25 @@ def test_a_refused_proposal_is_closed_and_cannot_be_written(world):
     with pytest.raises(UserError, match="déjà écartée"):
         g.confirm(proposal["proposal_id"])
     assert not [c for c in cal.calls if c[3] == "create"]
+
+
+def test_the_correction_does_not_erode_itself(world):
+    """Sessions written at the corrected 150 min that really take 150 keep the factor at 1.25: the ratio is
+    measured against the 120 the user said, not against the 150 that was written."""
+    g, _ = world
+    for week in range(3):
+        base = datetime(2026, 10, 5) + timedelta(weeks=week, hours=18)
+        g.conn.execute("INSERT INTO written(event_id, calendar_id, group_id, kind, part, summary, start, end, link, "
+                       "created_at) VALUES(?, 'primary', ?, 'sport', 'main', 'Sport', ?, ?, '', ?)",
+                       (f"w-{week}", 200 + week, base.isoformat(), (base + timedelta(minutes=150)).isoformat(),
+                        NOW.isoformat()))
+        g.conn.commit()
+        g.took(str(200 + week), 150)
+    assert store_factors(g)["kind:sport"] == (1.25, 3)
+    assert g.propose("sport", 1)["minutes"]["activity"] == 150
+
+
+def store_factors(g):
+    from agenda_guardian import store
+
+    return store.factors(g.conn)

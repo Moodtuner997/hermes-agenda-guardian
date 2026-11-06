@@ -332,9 +332,10 @@ class AgendaMixin:
         except sources.SourceError as exc:
             events = []
             warnings.append(tr(profile["language"], "cal_unreadable", why=exc))
-        mine = {r["event_id"] for r in store.written(self.conn)}
-        wrote = [r for r in store.written(self.conn)
-                 if monday <= datetime.fromisoformat(r["start"]).date() <= last]
+        live = store.written(self.conn)
+        ours = {(r["summary"], r["start"], r["end"]) for r in live}
+        events = [e for e in events if (e.title, e.start.isoformat(), e.end.isoformat()) not in ours]
+        wrote = [r for r in live if monday <= datetime.fromisoformat(r["start"]).date() <= last]
         pending = []
         for p in store.pending_proposals(self.conn):
             if now - datetime.fromisoformat(p["created_at"]) > PROPOSAL_LIFETIME:
@@ -346,4 +347,14 @@ class AgendaMixin:
                  for e in events]
         return {"ok": True, "week_start": monday.isoformat(), "today": now.date().isoformat(), "events": shown,
                 "written": wrote, "proposed": pending, "write_enabled": self.write_enabled(), "warnings": warnings,
-                "mine_count": len(mine), "language": profile["language"]}
+                "language": profile["language"]}
+
+    def refuse(self, proposal_id: int) -> dict:
+        lang = self.lang()
+        proposal = store.get_proposal(self.conn, proposal_id)
+        if proposal is None:
+            raise UserError(tr(lang, "confirm_unknown", id=proposal_id))
+        if proposal["status"] != "pending":
+            raise UserError(tr(lang, "confirm_done", id=proposal_id, status=tr(lang, "status_" + proposal["status"])))
+        store.set_proposal_status(self.conn, proposal_id, "refused")
+        return {"ok": True, "text": tr(lang, "refused", id=proposal_id)}

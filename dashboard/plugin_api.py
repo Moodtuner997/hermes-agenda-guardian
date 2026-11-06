@@ -1,7 +1,8 @@
 """Dashboard API of agenda-guardian, mounted at /api/plugins/agenda-guardian/.
 
 A thin layer over the same Guardian the slash command and the tools use. Reading a plan never changes
-what the reminders follow; adding a task and logging a real duration are the only writes.
+what the reminders follow. Writes: adding a task, logging a real duration, and, on the user's click, writing or
+undoing a proposal (which still needs the switch the user turned on with /day write on).
 """
 
 from __future__ import annotations
@@ -87,3 +88,33 @@ def add_task(body: NewTask):
 @router.post("/tasks/{task_id}/done")
 def finish_task(task_id: int, body: Finished):
     return _guard(lambda plugin, guardian: {"message": guardian.done(str(task_id), body.minutes)})
+
+
+# --- the week: the agenda this plugin keeps beside the calendar ------------------------------------------------
+
+class Which(BaseModel):
+    days: str = ""
+
+
+@router.get("/week")
+def get_week(week_of: str = ""):
+    def build(plugin, guardian):
+        return guardian.week_view(plugin.parse_day(week_of, guardian.now().date()) if week_of else None)
+
+    return _guard(build)
+
+
+@router.post("/proposals/{proposal_id}/ok")
+def accept_proposal(proposal_id: int, body: Which):
+    """The user's click on OK. Writing still needs the switch the user turned on with /day write on."""
+    return _guard(lambda plugin, guardian: guardian.confirm(proposal_id, body.days))
+
+
+@router.post("/proposals/{proposal_id}/refuse")
+def refuse_proposal(proposal_id: int):
+    return _guard(lambda plugin, guardian: guardian.refuse(proposal_id))
+
+
+@router.post("/groups/{group_id}/undo")
+def undo_group(group_id: int):
+    return _guard(lambda plugin, guardian: guardian.undo(str(group_id)))

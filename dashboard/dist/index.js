@@ -23,6 +23,11 @@
       priority: "Priority", realTime: "Real minutes", done: "Done", empty: "Nothing planned for this day.",
       pick: "Click a block to see why it is there.", meeting: "Meeting", noTasks: "No open task.",
       learn: "Log the real time: the plan learns your pace from it.",
+      dayMode: "Day", weekMode: "Week", weekOf: "Week of", legendYours: "Your events", legendWritten: "Written by the plugin",
+      legendProposed: "Proposed, waiting for you", pending: "Waiting for your answer", okBtn: "Write it", refuse: "Not this one",
+      undo: "Take it back", reasons: "Why here", writeOff: "Writing is off: type /day write on yourself to allow it.",
+      writeOn: "Writing is on, only after your click.", nothingWeek: "Nothing proposed. Ask your agent to fit an activity in.",
+      pickWeek: "Click a written or proposed block to see it.",
     },
     fr: {
       title: "Aujourd'hui", today: "Aujourd'hui", planned: "planifié", free: "libre", notToday: "Pas aujourd'hui",
@@ -30,6 +35,13 @@
       minutes: "Minutes", priority: "Priorité", realTime: "Minutes réelles", done: "Fait",
       empty: "Rien de planifié ce jour-là.", pick: "Clique un bloc pour voir pourquoi il est là.", meeting: "Réunion",
       noTasks: "Aucune tâche ouverte.", learn: "Note le temps réel : le plan apprend ton rythme.",
+      dayMode: "Jour", weekMode: "Semaine", weekOf: "Semaine du", legendYours: "Tes événements",
+      legendWritten: "Écrit par le plugin", legendProposed: "Proposé, en attente de ton avis",
+      pending: "En attente de ta réponse", okBtn: "L'écrire", refuse: "Pas celle-là", undo: "Le retirer",
+      reasons: "Pourquoi ici", writeOff: "L'écriture est désactivée : tape /day write on toi-même pour l'autoriser.",
+      writeOn: "L'écriture est activée, seulement après ton clic.",
+      nothingWeek: "Rien de proposé. Demande à ton agent de caser une activité.",
+      pickWeek: "Clique un bloc écrit ou proposé pour le voir.",
     },
   };
 
@@ -140,7 +152,15 @@
 
   // ---- page -------------------------------------------------------------------------------------------
 
-  function Page() {
+  function Modes(props) {
+    return h("div", { className: "ag-modes" },
+      h(Button, { size: "sm", variant: props.mode === "day" ? "default" : "outline",
+                  onClick: function () { props.onMode("day"); } }, props.t.dayMode),
+      h(Button, { size: "sm", variant: props.mode === "week" ? "default" : "outline",
+                  onClick: function () { props.onMode("week"); } }, props.t.weekMode));
+  }
+
+  function DayPage(props) {
     const a = useState(function () { return new URLSearchParams(window.location.search).get("day") || ""; }),
       day = a[0], setDay = a[1];
     const b = useState(null), data = b[0], setData = b[1];
@@ -167,6 +187,7 @@
       h("div", { className: "ag-head" },
         h("h1", null, (shown === data.today ? t.title + " · " : "") + shown),
         h("div", { className: "ag-inline" },
+          h(Modes, { t: t, mode: "day", onMode: props.onMode }),
           h(Button, { size: "sm", variant: "outline", onClick: function () { setDay(shift(shown, -1)); setSelected(-1); } }, "‹"),
           h(Button, { size: "sm", variant: "outline", onClick: function () { setDay(""); setSelected(-1); } }, t.today),
           h(Button, { size: "sm", variant: "outline", onClick: function () { setDay(shift(shown, 1)); setSelected(-1); } }, "›"),
@@ -198,6 +219,142 @@
           h(Card, null, h(CardContent, { className: "ag-card" },
             h("h2", null, t.rules),
             h("ul", { className: "ag-rules" }, data.rules.map(function (r, i) { return h("li", { key: i }, r); })))))));
+  }
+
+  // ---- the week: your events, what the plugin wrote, what it proposes -------------------------------------------
+
+  const WPX = 0.62; // pixels per minute in the week grid
+
+  function minutesOf(iso) {
+    const d = new Date(iso);
+    return d.getHours() * 60 + d.getMinutes();
+  }
+
+  function WeekPage(props) {
+    const a = useState(""), weekOf = a[0], setWeekOf = a[1];
+    const b = useState(null), data = b[0], setData = b[1];
+    const c = useState(null), error = c[0], setError = c[1];
+    const e = useState(null), picked = e[0], setPicked = e[1];
+
+    const load = useCallback(function () {
+      SDK.fetchJSON(API + "/week" + (weekOf ? "?week_of=" + encodeURIComponent(weekOf) : ""))
+        .then(function (d) { setData(d); setError(null); })
+        .catch(function (err) { setError(detail(err)); });
+    }, [weekOf]);
+    useEffect(function () { load(); const timer = setInterval(load, 60000); return function () { clearInterval(timer); }; }, [load]);
+
+    const act = function (promise) {
+      promise.then(function () { setError(null); setPicked(null); load(); }).catch(function (err) { setError(detail(err)); });
+    };
+
+    if (!data) return h("div", { className: "ag-page" }, error ? h("p", { className: "ag-error" }, error) : "…");
+    const t = TEXT[data.language] || TEXT.en;
+    const days = [];
+    for (let i = 0; i < 7; i++) days.push(shift(data.week_start, i));
+
+    let top = 8 * 60, bottom = 23 * 60;
+    const all = [].concat(
+      data.events.filter(function (x) { return !x.all_day; }).map(function (x) { return [x.start, x.end]; }),
+      data.written.map(function (x) { return [x.start, x.end]; }),
+      data.proposed.map(function (x) { return [x.block_start, x.block_end]; }));
+    all.forEach(function (p) {
+      top = Math.min(top, Math.floor(minutesOf(p[0]) / 60) * 60);
+      bottom = Math.max(bottom, Math.ceil(minutesOf(p[1]) / 60) * 60);
+    });
+    bottom = Math.min(Math.max(bottom, top + 60), 24 * 60);
+    const at = function (m) { return (m - top) * WPX; };
+    const place = function (start, end, cls, label, key, extra) {
+      const s = minutesOf(start), en = Math.max(minutesOf(end), s + 15);
+      return h("div", Object.assign({ key: key, className: "ag-box " + cls,
+        style: { top: at(s) + "px", height: Math.max(12, (en - s) * WPX - 2) + "px" } }, extra || {}), label);
+    };
+    const hourLines = [], hourLabels = [];
+    for (let m = top; m <= bottom; m += 60) {
+      hourLines.push(h("div", { key: "h" + m, className: "ag-hour", style: { top: at(m) + "px" } }));
+      hourLabels.push(h("span", { key: "t" + m, style: { top: at(m) + "px" } }, String(Math.floor(m / 60)).padStart(2, "0") + ":00"));
+    }
+    const heightPx = (bottom - top) * WPX + "px";
+
+    const columns = days.map(function (day) {
+      const layers = [];
+      data.events.forEach(function (x, i) {
+        if (!x.all_day && x.start.slice(0, 10) === day) layers.push(place(x.start, x.end, "ag-event", x.title, "e" + i));
+      });
+      data.written.forEach(function (x, i) {
+        if (x.start.slice(0, 10) !== day) return;
+        const sel = picked && picked.kind === "written" && picked.row.event_id === x.event_id;
+        layers.push(place(x.start, x.end, "ag-written" + (sel ? " ag-selected" : ""), x.summary, "w" + i,
+          { onClick: function () { setPicked({ kind: "written", row: x }); } }));
+      });
+      data.proposed.forEach(function (x, i) {
+        if (x.day !== day) return;
+        const sel = picked && picked.kind === "proposed" && picked.row.proposal === x.proposal && picked.row.day === x.day;
+        layers.push(place(x.block_start, x.block_end, "ag-proposed" + (sel ? " ag-selected" : ""),
+          "? " + x.kind + " " + x.start.slice(11, 16), "p" + i,
+          { onClick: function () { setPicked({ kind: "proposed", row: x }); } }));
+      });
+      return h("div", { key: day, className: "ag-week-col", style: { height: heightPx } }, hourLines, h("div", { className: "ag-layer" }, layers));
+    });
+
+    const proposals = {};
+    data.proposed.forEach(function (x) { (proposals[x.proposal] = proposals[x.proposal] || []).push(x); });
+    const pendingCards = Object.keys(proposals).map(function (id) {
+      const rows = proposals[id];
+      return h("div", { key: "pp" + id, className: "ag-pending" },
+        h("strong", null, "#" + id + " · " + rows[0].kind + " × " + rows.length),
+        h("ul", null, rows.map(function (x, i) { return h("li", { key: i }, x.weekday + " " + x.start.slice(11, 16) + "-" + x.end.slice(11, 16)); })),
+        h("div", { className: "ag-inline" },
+          h(Button, { size: "sm", disabled: !data.write_enabled, title: data.write_enabled ? "" : t.writeOff,
+                      onClick: function () { act(post(API + "/proposals/" + id + "/ok", { days: "" })); } }, t.okBtn),
+          h(Button, { size: "sm", variant: "outline", onClick: function () { act(post(API + "/proposals/" + id + "/refuse", {})); } }, t.refuse)));
+    });
+
+    let detailPanel = h("p", { className: "ag-muted" }, t.pickWeek);
+    if (picked && picked.kind === "proposed") {
+      detailPanel = h("div", null, h("strong", null, t.reasons + " · " + picked.row.kind + " " + picked.row.weekday),
+        h("ul", null, picked.row.reasons.concat(picked.row.notes.map(function (n) { return "! " + n; }))
+          .map(function (r, i) { return h("li", { key: i }, r); })));
+    } else if (picked && picked.kind === "written") {
+      detailPanel = h("div", null, h("strong", null, picked.row.summary + " · " + picked.row.start.slice(0, 16).replace("T", " ")),
+        picked.row.link ? h("p", null, h("a", { href: picked.row.link, target: "_blank", rel: "noreferrer" }, picked.row.link)) : null,
+        h(Button, { size: "sm", variant: "outline", onClick: function () { act(post(API + "/groups/" + picked.row.group_id + "/undo", {})); } }, t.undo));
+    }
+
+    return h("div", { className: "ag-page" },
+      h("div", { className: "ag-head" },
+        h("h1", null, t.weekOf + " " + data.week_start),
+        h("div", { className: "ag-inline" },
+          h(Modes, { t: t, mode: "week", onMode: props.onMode }),
+          h(Button, { size: "sm", variant: "outline", onClick: function () { setWeekOf(shift(data.week_start, -7)); setPicked(null); } }, "‹"),
+          h(Button, { size: "sm", variant: "outline", onClick: function () { setWeekOf(""); setPicked(null); } }, t.today),
+          h(Button, { size: "sm", variant: "outline", onClick: function () { setWeekOf(shift(data.week_start, 7)); setPicked(null); } }, "›"),
+          h(Badge, null, data.write_enabled ? t.writeOn : t.writeOff))),
+      error ? h("p", { className: "ag-error" }, error) : null,
+      data.warnings.map(function (w, i) { return h("p", { key: "w" + i, className: "ag-warn" }, "! " + w); }),
+      h("div", { className: "ag-legend" },
+        h("span", null, h("i", { className: "ag-event" }), t.legendYours),
+        h("span", null, h("i", { className: "ag-written" }), t.legendWritten),
+        h("span", null, h("i", { className: "ag-proposed" }), t.legendProposed)),
+      h("div", { className: "ag-grid" },
+        h(Card, null, h(CardContent, { className: "ag-card" },
+          h("div", { className: "ag-week" },
+            h("div", null),
+            days.map(function (day) {
+              return h("div", { key: "hd" + day, className: "ag-week-head" + (day === data.today ? " ag-today" : "") },
+                new Date(day + "T12:00:00").toLocaleDateString(data.language, { weekday: "short", day: "2-digit" }));
+            }),
+            h("div", { className: "ag-week-hours", style: { height: heightPx } }, hourLabels),
+            columns))),
+        h("div", { className: "ag-side" },
+          h(Card, null, h(CardContent, { className: "ag-card" },
+            h("h2", null, t.pending),
+            pendingCards.length ? pendingCards : h("p", { className: "ag-muted" }, t.nothingWeek))),
+          h(Card, null, h(CardContent, { className: "ag-card" }, detailPanel)))));
+  }
+
+  function Page() {
+    const a = useState("day"), mode = a[0], setMode = a[1];
+    return mode === "week" ? h(WeekPage, { onMode: setMode }) : h(DayPage, { onMode: setMode });
   }
 
   window.__HERMES_PLUGINS__.register("agenda-guardian", Page);

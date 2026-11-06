@@ -202,12 +202,14 @@ def test_took_rejects_an_unknown_session(world):
 def test_week_view_separates_calendar_events_proposals_and_written(world):
     g, cal = world
     g.set_write(True)
+    cal.add("Réunions", datetime(2026, 11, 9, 9, 0), datetime(2026, 11, 9, 12, 0))
     g.confirm(g.propose("sport", 1)["proposal_id"])
     g.propose("sport", 1, days="jeu")
     view = g.week_view()
     assert view["week_start"] == "2026-11-09" and view["write_enabled"]
     assert len(view["written"]) == 3 and len(view["proposed"]) == 1
-    assert any(e["title"] == "Sport" for e in view["events"])
+    assert not any(e["title"].startswith("Sport") for e in view["events"])  # ours are listed under "written"
+    assert any(e["title"] == "Réunions" for e in view["events"])  # the user's own events are listed as theirs
 
 
 def test_model_and_core_share_one_usererror():
@@ -247,3 +249,13 @@ def test_the_reminder_script_also_asks_the_duration_question(world):
     g._now = lambda: end + timedelta(minutes=10)
     assert "Combien de temps" in g.nudge_text()
     assert "Combien de temps" not in g.nudge_text()
+
+
+def test_a_refused_proposal_is_closed_and_cannot_be_written(world):
+    g, cal = world
+    g.set_write(True)
+    proposal = g.propose("sport", 1)
+    assert "écartée" in g.refuse(proposal["proposal_id"])["text"]
+    with pytest.raises(UserError, match="déjà écartée"):
+        g.confirm(proposal["proposal_id"])
+    assert not [c for c in cal.calls if c[3] == "create"]

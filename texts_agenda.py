@@ -84,7 +84,7 @@ EN = {
     "confirm_unknown": "No proposal #{id}.",
     "confirm_done": "Proposal #{id} is already {status}.",
     "status_written": "written", "status_partial": "partly written", "status_failed": "failed",
-    "status_expired": "expired", "status_pending": "pending",
+    "status_expired": "expired", "status_pending": "pending", "status_refused": "set aside",
     "confirm_expired": "Proposal #{id} ({kind}) is more than a day old: your calendar may have changed. "
                        "Ask for a new one.",
     "confirm_nothing": "No session of this proposal matches.",
@@ -96,6 +96,7 @@ EN = {
     "event_desc": "Created by agenda-guardian (session #{id}). Safe to delete, nothing else depends on it.",
     "part_before": "{name}: get ready",
     "part_after": "{name}: wind down",
+    "refused": "Proposal #{id} set aside. Nothing was written.",
     "undo_usage": "/day undo [last | all | <number>]",
     "undo_none": "Nothing written by me is left to remove.",
     "undo_failed": "{summary}: not removed ({why}).",
@@ -188,7 +189,7 @@ FR = {
     "confirm_unknown": "Pas de proposition n°{id}.",
     "confirm_done": "La proposition n°{id} est déjà {status}.",
     "status_written": "écrite", "status_partial": "écrite en partie", "status_failed": "en échec",
-    "status_expired": "périmée", "status_pending": "en attente",
+    "status_expired": "périmée", "status_pending": "en attente", "status_refused": "écartée",
     "confirm_expired": "La proposition n°{id} ({kind}) a plus d'un jour : ton agenda a pu changer. "
                        "Demandes-en une nouvelle.",
     "confirm_nothing": "Aucune séance de cette proposition ne correspond.",
@@ -201,6 +202,7 @@ FR = {
     "event_desc": "Créé par agenda-guardian (séance n°{id}). Tu peux le supprimer, rien d'autre n'en dépend.",
     "part_before": "{name} : préparation",
     "part_after": "{name} : récupération",
+    "refused": "Proposition n°{id} écartée. Rien n'a été écrit.",
     "undo_usage": "/day undo [last | all | <numéro>]",
     "undo_none": "Rien de ce que j'ai écrit n'est à retirer.",
     "undo_failed": "{summary} : pas retiré ({why}).",

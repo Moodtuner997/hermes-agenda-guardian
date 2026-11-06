@@ -69,9 +69,18 @@ EN = {
     "done_usage": "/day done <# or name> <real minutes>",
     "drop_usage": "/day drop <# or name>",
     "cron_usage": "/day cron on [HH:MM] [deliver=telegram] | off | status",
-    "unknown_cmd": "Unknown command '{command}'.",
+    "unknown_cmd": "I do not know the command '{command}'. To ask in plain words, write it without /day (for example: "
+                   "fit 3 sport sessions in my week). /day help lists the commands.",
     "nothing_now": "(nothing to say right now)",
-    "help": """/day setup [auto]                  the rules to answer (work hours, focus, durations, calendar); auto adopts what Hermes already knows
+    "help": """Say what you want in plain words, with or without /day: "fit 3 sport sessions in my week", "what is my day?".
+Shortcuts:
+/day plan [tomorrow]         the plan of a day, each block with its reason
+/day add "name" 45m          a task with YOUR estimate
+/day done <# or name> <min>  log the real time (this calibrates the plan)
+/day write on|off            allow or forbid writing to your calendar (you type this)
+/day undo                    take back what this plugin wrote, nothing else
+/day help                    every command""",
+    "help_full": """/day setup [auto]                  the rules to answer (work hours, focus, durations, calendar); auto adopts what Hermes already knows
 /day set key=value ...             answer them, e.g. /day set work_hours=09:00-17:30 calendar=google
 /day add "name" 45m [cat=admin] [p=1] [due=fri]   a task with YOUR estimate
 /day list                          open tasks
@@ -220,9 +229,18 @@ FR = {
     "done_usage": "/day done <n° ou nom> <minutes réelles>",
     "drop_usage": "/day drop <n° ou nom>",
     "cron_usage": "/day cron on [HH:MM] [deliver=telegram] | off | status",
-    "unknown_cmd": "Commande inconnue « {command} ».",
+    "unknown_cmd": "Je ne connais pas la commande « {command} ». Pour demander en mots simples, écris ta demande sans /day "
+                   "(par exemple : place 3 séances de sport dans ma semaine). /day help liste les commandes.",
     "nothing_now": "(rien à dire pour l'instant)",
-    "help": """/day setup [auto]                  les réglages à faire (horaires, concentration, durées, agenda) ; auto reprend ce que Hermes sait déjà
+    "help": """Dis ce que tu veux en mots simples, avec ou sans /day : « place 3 séances de sport dans ma semaine », « c'est quoi ma journée ? ».
+Raccourcis :
+/day plan [demain]           le plan d'une journée, chaque bloc avec sa raison
+/day add "nom" 45m           une tâche avec TON estimation
+/day done <n° ou nom> <min>  noter le temps réel (c'est ce qui calibre le plan)
+/day write on|off            autoriser ou interdire l'écriture dans ton agenda (tu le tapes toi-même)
+/day undo                    retirer ce que ce plugin a écrit, jamais autre chose
+/day help                    toutes les commandes""",
+    "help_full": """/day setup [auto]                  les réglages à faire (horaires, concentration, durées, agenda) ; auto reprend ce que Hermes sait déjà
 /day set clé=valeur ...            les régler, ex. /day set work_hours=09:00-17:30 calendar=google
 /day add "nom" 45m [cat=admin] [p=1] [due=ven]   une tâche avec TON estimation
 /day list                          les tâches ouvertes

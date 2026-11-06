@@ -95,7 +95,7 @@ EN = {
     "confirm_nothing": "No session of this proposal matches.",
     "confirm_clash": "{day}: something was added to your calendar since the proposal ('{title}'): not written.",
     "confirm_failed": "{day}: the calendar refused ({why}). What was created stays recorded: /day undo {group}.",
-    "confirm_line": "Written #{group}: {day} {date} {block} ({n} event(s)) {link}",
+    "confirm_line": "Written #{group}: {kind}, {day} {date} {block} ({n} event(s)) {link}",
     "confirm_undo": "Changed your mind: /day undo (last one), /day undo <number> or /day undo all. "
                     "Only events written here are ever removed.",
     "event_desc": "Created by agenda-guardian (session #{id}). Safe to delete, nothing else depends on it.",
@@ -114,6 +114,34 @@ EN = {
     "took_msg": "{kind}: planned {planned} min, took {real} min. {calib}",
     "took_ask": "{kind} was planned until {end}. How long did it really take (the activity itself)? "
                 "Reply with the minutes (session #{group}); that is how the next proposal gets closer.",
+    # --- a whole week in one request, composed blocks, plain words ---
+    "free_text_prefix": "Use the agenda-guardian tools (day_*) for this request: ",
+    "agent_week": "Tell the user this week in plain words in their language: day by day, then why for each activity "
+                  "(the reasons are in the data), what was left out and why. Then ask the questions listed here. Do "
+                  "not call day_confirm until they clearly say yes. To change a slot, plan again (day_week_plan or "
+                  "day_stage): never write to the calendar with any other tool.",
+    "agent_stage": "Show the user these blocks and ask for a clear yes. Only then call day_confirm with this "
+                   "proposal number, never another calendar tool.",
+    "r_hist_over": "History: {day}s between {start} and {end} were taken {taken} week(s) out of {weeks}, but not in "
+                   "the last {recent} weeks (last time {ago} week(s) ago, for example '{example}'). I treat that "
+                   "habit as over and keep the day: tell me if it is back.",
+    "short_part": "only part of it fits",
+    "rej_part": "{day}: only {got} of {wanted} session(s) fit once your meetings and breaks are kept.",
+    "week_count": "Give between 1 and 6 activities to plan.",
+    "week_number": "'{name}': durations and counts must be whole numbers.",
+    "week_range": "'{name}': {key} must be between {low} and {high}.",
+    "week_minutes": "How long does one '{name}' session take? Give the minutes (the user's own figure).",
+    "week_head": "Proposal #{id}: your week, {n} session(s). Nothing is written to your calendar.",
+    "week_why": "Why",
+    "week_each": "{name}: {got} of {wanted} session(s)",
+    "week_daily": ", {per} a day of {real} min between {start} and {end}, {pause} min break between two",
+    "stage_count": "Give between 1 and 40 blocks.",
+    "stage_title": "Each block needs a short title (60 characters at most).",
+    "stage_range": "Blocks must fall between today and {last}.",
+    "stage_clash": "'{title}' on {day} from {start} to {end} overlaps '{other}' in your calendar: move it.",
+    "stage_overlap": "'{a}' and '{b}' overlap on {day}.",
+    "stage_head": "Proposal #{id}: {n} block(s) exactly as you described them. Nothing is written to your calendar.",
+    "stage_said": "As you described it.",
 }
 
 FR = {
@@ -206,7 +234,7 @@ FR = {
     "confirm_clash": "{day} : quelque chose s'est ajouté à ton agenda depuis la proposition (« {title} ») : "
                      "rien d'écrit.",
     "confirm_failed": "{day} : l'agenda a refusé ({why}). Ce qui a été créé reste enregistré : /day undo {group}.",
-    "confirm_line": "Écrit n°{group} : {day} {date} {block} ({n} événement(s)) {link}",
+    "confirm_line": "Écrit n°{group} : {kind}, {day} {date} {block} ({n} événement(s)) {link}",
     "confirm_undo": "Tu changes d'avis : /day undo (la dernière), /day undo <numéro> ou /day undo all. "
                     "Seul ce qui a été écrit ici est retiré.",
     "event_desc": "Créé par agenda-guardian (séance n°{id}). Tu peux le supprimer, rien d'autre n'en dépend.",
@@ -226,4 +254,26 @@ FR = {
     "took_ask": "{kind} était prévu jusqu'à {end}. Combien de temps ça a vraiment pris (l'activité elle-même) ? "
                 "Réponds avec les minutes (séance n°{group}) : c'est comme ça que la prochaine proposition se "
                 "rapproche de la réalité.",
+    # --- la semaine en une demande, blocs composés, phrase libre ---
+    "free_text_prefix": "Utilise les outils agenda-guardian (day_*) pour cette demande : ",
+    "r_hist_over": "Historique : le {day} entre {start} et {end} était pris {taken} semaine(s) sur {weeks}, mais plus "
+                   "depuis {recent} semaines (la dernière fois il y a {ago} semaine(s), par exemple « {example} »). "
+                   "Je considère cette habitude comme finie et je garde le jour : dis-moi si elle revient.",
+    "short_part": "une partie seulement tient",
+    "rej_part": "{day} : seulement {got} séance(s) sur {wanted} tiennent une fois tes rendez-vous et tes pauses gardés.",
+    "week_count": "Donne entre 1 et 6 activités à placer.",
+    "week_number": "« {name} » : les durées et nombres doivent être des nombres entiers.",
+    "week_range": "« {name} » : {key} doit être compris entre {low} et {high}.",
+    "week_minutes": "Combien de temps dure une séance de « {name} » ? Donne les minutes (le chiffre de l'utilisateur).",
+    "week_head": "Proposition n°{id} : ta semaine, {n} séance(s). Rien n'est écrit dans ton agenda.",
+    "week_why": "Pourquoi",
+    "week_each": "{name} : {got} sur {wanted} séance(s)",
+    "week_daily": ", {per} par jour de {real} min entre {start} et {end}, {pause} min de pause entre deux",
+    "stage_count": "Donne entre 1 et 40 blocs.",
+    "stage_title": "Chaque bloc a besoin d'un titre court (60 caractères au plus).",
+    "stage_range": "Les blocs doivent tomber entre aujourd'hui et le {last}.",
+    "stage_clash": "« {title} » le {day} de {start} à {end} chevauche « {other} » dans ton agenda : déplace-le.",
+    "stage_overlap": "« {a} » et « {b} » se chevauchent le {day}.",
+    "stage_head": "Proposition n°{id} : {n} bloc(s) tels que tu les as décrits. Rien n'est écrit dans ton agenda.",
+    "stage_said": "Comme tu l'as décrit.",
 }

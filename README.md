@@ -16,8 +16,9 @@ who plans more than the day allows.
 - It reads your calendar and, by default, writes nothing. Writing to a Google calendar is off until you type
   `/day write on` yourself; then it only adds events it marks as its own, only after you say yes to a proposal
   that shows its reasons, and it can only remove those events (never one you created).
-- Works from the `/day` slash command, `hermes guardian` on the command line (not `hermes day`: the day-panel plugin already uses that name), thirteen agent tools (so the onboarding and the planning can
-  happen in a chat, including from a phone) and a **Today / Week** tab in the dashboard.
+- Works from the `/day` slash command, `hermes guardian` on the command line (not `hermes day`: the day-panel plugin already uses that name), fifteen agent tools (so the onboarding and the planning can
+  happen in a chat, including from a phone) and a **Today / Week** tab in the dashboard. `/day` followed by a
+  sentence ("fit three sport sessions in my week") is not a command: it goes to the agent as an ordinary message.
 
 ## Quick start
 
@@ -128,12 +129,27 @@ Before you validate
   - Do you want me to write this to your calendar? (nothing is written until you say yes: /day ok 1)
 ```
 
+### A whole week in one request
+
+You rarely have one activity. "Three sport sessions, two client calls of at least 2h30 in the morning, four hours
+of course every day" is one request, and the numbers are in the sentence. The agent passes them to `day_week_plan`
+in one call (nothing has to be saved first; a saved sheet only fills in what the sentence leaves out), and the
+plugin places each activity around your events **and around the ones placed before it**: sport, then calls, then
+two blocks of course a day, one after the other with a break. Each activity keeps its reasons; what does not fit
+is listed with the cause.
+
+Things the planner cannot express (a fixed appointment, an evening spent somewhere else) are blocks the agent
+composes from what you told it and registers with `day_stage`. They are checked against your calendar and then
+follow the same road as any proposal: your yes, the marker, `/day undo`. That is the only road in: the system
+prompt tells the agent never to create, move or delete calendar events with another tool.
+
 What it will and will not do:
 
 - **Reasons from your history.** It reads the next days and the eight weeks before. A window taken in at least
-  half of the recorded weeks counts as a habit and the day is left out, with the title it found as proof; a short
-  history (under three weeks with events) is said, not hidden. Days are spread out; consecutive days are used
-  only when nothing better exists, and it says so.
+  half of the recorded weeks counts as a habit and the day is left out, with the title it found as proof, unless
+  it has not happened in the last three weeks: then the habit is treated as over, the day is kept, and the reason
+  says so. A short history (under three weeks with events) is said, not hidden. Days are spread out; consecutive
+  days are used only when nothing better exists, and it says so.
 - **What the calendar cannot show.** `/day habit` records what you do outside the calendar; every proposal asks
   about the evenings it picked.
 - **Your events are never touched.** It only places events in free time, with the buffer you set around
@@ -193,8 +209,8 @@ answer a proposal, and a written block has **Take it back**. **Write it** stays 
 ## Agent tools
 
 `day_setup`, `day_add_task`, `day_plan`, `day_done`, `day_tasks`, `day_schedule`, and, for the week:
-`day_kind` (the activity sheet), `day_habit`, `day_propose` (read-only), `day_confirm`, `day_undo`, `day_took`
-and `day_week` (read-only). The setup tool hands the agent
+`day_kind` (the activity sheet), `day_habit`, `day_propose`, `day_week_plan` and `day_stage` (all three
+read-only: they only propose), `day_confirm`, `day_undo`, `day_took` and `day_week` (read-only). The setup tool hands the agent
 what the profile already shows (time zone, calendar, other reminders) so it proposes your answers from what it
 knows of you and asks only to confirm or complete, in your language. It never invents them. `day_confirm`
 refuses unless you turned writing on yourself, and no tool can turn it on.
@@ -224,7 +240,11 @@ refuses unless you turned writing on yourself, and no tool can turn it on.
 - **Dashboard:** `GET /plan`, `GET /week`, `POST /tasks`, `POST /tasks/<id>/done`, `POST /proposals/<id>/ok`,
   `POST /proposals/<id>/refuse`, `POST /groups/<id>/undo` under `/api/plugins/agenda-guardian/`, behind the
   dashboard's own authentication. Writing from the dashboard needs the same `/day write on` switch.
-- **System prompt:** one short section (rules for the agent, about 1,000 characters, in your language).
+- **System prompt:** one short section (rules for the agent, about 1,600 characters, in your language).
+- **Hook:** one, `pre_gateway_dispatch`. It looks at the text of each incoming chat message and acts on one
+  case only: a message that starts with `/day` followed by a sentence (not a command). That message is rewritten
+  into an ordinary request for the agent, prefixed with a pointer to the plugin's tools. It reads nothing else,
+  stores nothing and never drops a message; on any error it does nothing.
 - **Approvals:** the plugin touches no tool call. `day_schedule on` goes through the registry's `cronjob_manage`
   tool, so Hermes' own checks apply; the tool descriptions tell the agent to ask you first. The yes before a
   calendar write is the agent's to collect in conversation; what the plugin enforces itself is the switch you
@@ -251,12 +271,16 @@ refuses unless you turned writing on yourself, and no tool can turn it on.
   config or the machine's locale until you set it (`/day set language=fr`); other languages are not translated.
 - Time zones: set `timezone=Europe/Paris` for events with other zones; on Windows that needs the `tzdata`
   Python package. Without it, the computer's clock zone is used.
+- The plugin cannot stop another tool (the Google Workspace skill itself, the terminal) from writing to your
+  calendar. Its system prompt tells the agent not to, and every plan has a road in (`day_week_plan`,
+  `day_stage`) so the agent has no reason to go around. Events written by another tool carry no marker, so
+  `/day undo` cannot see them: that was seen once in real use, and is why `day_stage` exists.
 - One calendar, one person. Not a team scheduler.
 
 ## Development
 
 ```
-python -m pytest tests -q                  # 90 tests, no Hermes needed
+python -m pytest tests -q                  # 103 tests, no Hermes needed
 hermes plugins validate .
 HERMES_HOME=<home> <hermes python> tests/e2e_hermes.py     # real tool calls, real cron, no model
 python tests/make_demo_profile.py --home <home>             # an invented day for screenshots

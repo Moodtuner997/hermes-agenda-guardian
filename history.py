@@ -12,6 +12,7 @@ from .profile import minutes_of
 
 WEEKS = 8
 MIN_WEEKS = 3  # fewer weeks with any event: too little history to call anything a habit
+RECENT_WEEKS = 3  # a pattern not seen in the last few weeks is over, however often it happened before
 
 
 @dataclass
@@ -19,6 +20,8 @@ class DayStat:
     weekday: int
     weeks: int = 0  # how many of this weekday the history covers
     taken: int = 0  # of those, how many had an event inside the window
+    recent: int = 0  # of those, how many in the last RECENT_WEEKS weeks
+    ago: int = 0  # weeks between the most recent one and now (1 = the week just before this one)
     titles: Counter = field(default_factory=Counter)
     example: str = ""  # the most recent title found in the window
     load_min: float = 0.0  # average minutes of events over the whole day
@@ -26,6 +29,11 @@ class DayStat:
     @property
     def share(self) -> float:
         return self.taken / self.weeks if self.weeks else 0.0
+
+    @property
+    def over(self) -> bool:
+        """Taken often enough to be a habit, but not once recently: it stopped."""
+        return self.taken > 0 and self.recent == 0
 
 
 @dataclass
@@ -76,6 +84,8 @@ def analyse(events: list[Event], today: date, win: tuple[str, str], weeks: int =
             inside = [e for e in mine if _overlap(e, w_lo, w_hi) > 0]
             if inside:
                 stat.taken += 1
+                stat.recent += w >= weeks - RECENT_WEEKS
+                stat.ago = weeks - w
                 stat.example = sorted(inside, key=lambda e: e.start)[0].title
                 stat.titles.update(e.title.strip().lower() for e in inside)
     for stat in stats.values():

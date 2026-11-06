@@ -8,10 +8,12 @@ ni un agenda particulier.
 - Déterministe : aucun appel de modèle, nulle part (planificateur, brief, rappels). Les deux crons sont `no_agent`.
 - Aucune écriture dans un agenda externe, jamais. Les seules écritures : `HERMES_HOME/plugin-data/agenda-guardian/`,
   et après `/day cron on` deux scripts dans `HERMES_HOME/scripts/` et deux crons `agenda-guardian-*`.
+- Tout texte affiché existe en anglais et en français dans `texts.py` (l'anglais est la référence, le français
+  se tutoie) ; la langue vient de la config Hermes, du système, puis du réglage de l'utilisateur.
 - Tout texte affiché reste explicable : un bloc dit d'où il vient (estimation, facteur de calibrage, échéance,
   règle) ; une règle non posée par l'utilisateur est marquée « default ».
 - Un calendrier illisible ou absent donne un avertissement visible, jamais un jour vide silencieux.
-- Chaque modification passe `python -m pytest tests -q` (57 tests), `hermes plugins validate .`, puis, si le cron ou
+- Chaque modification passe `python -m pytest tests -q` (67 tests), `hermes plugins validate .`, puis, si le cron ou
   le tableau de bord bougent, `tests/e2e_hermes.py` avec l'interpréteur de Hermes.
 - README, PR et textes publics en anglais ; commits en français, format conventionnel.
 - Jamais de données réelles dans le dépôt : la démo vient de `tests/make_demo_profile.py` (noms inventés).

@@ -14,6 +14,7 @@ from typing import Any
 
 from . import commands
 from .core import Guardian, UserError, parse_day, parse_minutes
+from .texts import tr
 
 
 def _home() -> Path:
@@ -102,7 +103,7 @@ def _t_tasks(g: Guardian, a: dict) -> dict:
 
 def _t_add(g: Guardian, a: dict) -> dict:
     minutes = a.get("minutes")
-    due = parse_day(str(a["due"]), g.now().date()) if a.get("due") else None
+    due = parse_day(str(a["due"]), g.now().date(), g.lang()) if a.get("due") else None
     return {"message": g.add(str(a.get("name", "")), int(minutes) if minutes is not None else None,
                              str(a.get("category", "")), int(a.get("priority", 2)), due)}
 
@@ -114,8 +115,10 @@ def _t_done(g: Guardian, a: dict) -> dict:
 
 def _t_setup(g: Guardian, a: dict) -> dict:
     settings = a.get("settings") or {}
+    if a.get("adopt"):
+        return {"result": g.setup_auto()}
     if not settings:
-        return {"questions": g.setup_text()}
+        return {"questions": g.setup_text(), "found": g.facts(), "for_agent": tr("en", "agent_hint")}
     return {"result": g.set_rules([(str(k), str(v)) for k, v in settings.items()])}
 
 
@@ -140,9 +143,12 @@ _TOOLS = [
     ("day_setup", _t_setup, _schema(
         "day_setup",
         "Agenda guardian onboarding. With no arguments it returns the planning questions with the user's current "
-        "answers. With 'settings' (a map such as {\"work_hours\": \"09:00-17:30\", \"category\": \"admin:20\"}) it "
-        "saves the user's answers. Ask the user, never invent their answers.",
-        {"settings": {"type": "object", "additionalProperties": _S,
+        "answers, plus what the Hermes profile already shows (time zone, connected calendar, existing reminders): "
+        "propose answers from what you know of the user, then ask only to confirm or complete, in their language. "
+        "With 'settings' (a map such as {\"work_hours\": \"09:00-17:30\", \"category\": \"admin:20\"}) it saves "
+        "the user's answers; with adopt=true it adopts the calendar, language and time zone the profile already has. "
+        "Never invent answers.",
+        {"adopt": {"type": "boolean"}, "settings": {"type": "object", "additionalProperties": _S,
                       "description": "rule name to value; keys: work_hours, workdays, protected, focus, "
                                      "max_block_min, break_min, buffer_min, max_tasks_per_day, calendar, "
                                      "category (name:minutes), language, timezone"}})),

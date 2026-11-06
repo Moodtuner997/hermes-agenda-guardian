@@ -27,7 +27,8 @@ hermes plugins enable agenda-guardian
 Then, in a chat:
 
 ```
-/day setup                                   the questions, with your current answers
+/day setup                                   what your Hermes profile already has, then the few questions
+/day setup auto                              adopt the calendar, language and time zone it found
 /day set work_hours=09:00-17:30 focus=09:00-11:30 protected=lunch@12:30-13:30 calendar=google
 /day add "Write the quote" 45m cat=writing p=1 due=fri
 /day plan                                    today, from now
@@ -122,8 +123,9 @@ field to log the real time. Reading it changes nothing the reminders follow.
 
 ## Agent tools
 
-`day_setup`, `day_add_task`, `day_plan`, `day_done`, `day_tasks`, `day_schedule`. The setup tool tells the agent
-to ask you, never to invent your answers.
+`day_setup`, `day_add_task`, `day_plan`, `day_done`, `day_tasks`, `day_schedule`. The setup tool hands the agent
+what the profile already shows (time zone, calendar, other reminders) so it proposes your answers from what it
+knows of you and asks only to confirm or complete, in your language. It never invents them.
 
 ## Disclosure
 
@@ -131,7 +133,9 @@ to ask you, never to invent your answers.
   like a password; `http://` is flagged in the plan). With `calendar=google` or `calendar=cmd:` it runs the
   program you chose, which has its own network access.
 - **Reads outside the plugin's own data:** the calendar source you configure (event titles, times, status).
-  Nothing else.
+  For onboarding only: the `timezone` and `language` lines of `HERMES_HOME/config.yaml`, whether the Google
+  Workspace skill and its `google_token.json` exist (the token is never opened) and the name and schedule of the
+  other reminders in `cron/jobs.json` (prompts are not read). The language also falls back to the machine's locale.
 - **Writes:** its own data folder (`HERMES_HOME/plugin-data/agenda-guardian/`: one SQLite file with your rules,
   tasks and measurements). Only after `/day cron on`: two small Python scripts in `HERMES_HOME/scripts/` and two
   cron jobs named `agenda-guardian-brief` and `agenda-guardian-nudge`. It never writes to a calendar.
@@ -156,7 +160,8 @@ to ask you, never to invent your answers.
   runner, with the default local target.
 - The Google source is tested against the skill script's output format and a stubbed process, not against a
   real Google account in this repository's test suite.
-- Brief and reminders are English or French (`/day set language=fr`); the "why" lines are English.
+- English and French throughout (setup, replies, plans, reasons, reminders). The language follows your Hermes
+  config or the machine's locale until you set it (`/day set language=fr`); other languages are not translated.
 - Time zones: set `timezone=Europe/Paris` for events with other zones; on Windows that needs the `tzdata`
   Python package. Without it, the computer's clock zone is used.
 - One calendar, one person. Not a team scheduler.
@@ -164,7 +169,7 @@ to ask you, never to invent your answers.
 ## Development
 
 ```
-python -m pytest tests -q                  # 57 tests, no Hermes needed
+python -m pytest tests -q                  # 67 tests, no Hermes needed
 hermes plugins validate .
 HERMES_HOME=<home> <hermes python> tests/e2e_hermes.py     # real tool calls, real cron, no model
 python tests/make_demo_profile.py --home <home>             # an invented day for screenshots

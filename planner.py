@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta
 
 from .model import Block, Dropped, Event, Plan, Task
 from .profile import clock, minutes_of, source_of
+from .texts import tr
 
 STEP = 5
 
@@ -67,40 +68,38 @@ def chunk_sizes(planned: int, max_block: int) -> list[int]:
     return [(base + (1 if i < extra else 0)) * STEP for i in range(count)]
 
 
-def _why(task: Task, planned: int, factor: tuple[float, int], focus: bool, day: date) -> list[str]:
+def _why(task: Task, planned: int, factor: tuple[float, int], focus: bool, day: date, lang: str = "en") -> list[str]:
     value, count = factor
     if count and value != 1.0:
-        lines = [f"{planned} min = your estimate {task.est_min} x {value:g} (median of {count} finished "
-                 f"'{task.category}' tasks)"]
+        lines = [tr(lang, "why_factor", planned=planned, est=task.est_min, value=value, count=count,
+                    category=task.category)]
     elif count:
-        lines = [f"{planned} min = your estimate ({count} finished '{task.category}' task"
-                 f"{'s' if count != 1 else ''}; calibration starts at 3)"]
+        lines = [tr(lang, "why_count", planned=planned, count=count, category=task.category,
+                    s="s" if count != 1 else "")]
     else:
-        lines = [f"{planned} min = your estimate (no finished '{task.category}' task yet)"]
+        lines = [tr(lang, "why_none", planned=planned, category=task.category)]
     if task.due:
-        if task.due < day:
-            lines.append(f"overdue since {task.due.isoformat()}")
-        else:
-            lines.append(f"due {task.due.isoformat()}")
-    lines.append(f"priority {task.priority}")
+        lines.append(tr(lang, "why_overdue" if task.due < day else "why_due", day=task.due.isoformat()))
+    lines.append(tr(lang, "why_priority", n=task.priority))
     if focus:
-        lines.append("in your focus window")
+        lines.append(tr(lang, "why_focus"))
     return lines
 
 
 def rules_used(profile: dict) -> list[str]:
     """Each rule that shaped the plan, once, with whether the user set it or it is still a default."""
+    lang = profile.get("language", "en")
     start, end = profile["work_hours"]
-    lines = [f"work hours {start}-{end} ({source_of(profile, 'work_hours')})"]
-    lines += [f"{p['name']} {p['start']}-{p['end']} kept free ({source_of(profile, 'protected')})"
-              for p in profile["protected"]]
+    lines = [tr(lang, "rule_hours", start=start, end=end, source=source_of(profile, "work_hours"))]
+    lines += [tr(lang, "rule_protected", name=p["name"], start=p["start"], end=p["end"],
+                 source=source_of(profile, "protected")) for p in profile["protected"]]
     if profile["focus"]:
         spans = ", ".join(f"{f['start']}-{f['end']}" for f in profile["focus"])
-        lines.append(f"focus window {spans} for priority 1 ({source_of(profile, 'focus')})")
-    lines += [f"{profile['buffer_min']} min around meetings ({source_of(profile, 'buffer_min')})",
-              f"blocks of at most {profile['max_block_min']} min, {profile['break_min']} min break "
-              f"({source_of(profile, 'max_block_min')})",
-              f"at most {profile['max_tasks_per_day']} tasks a day ({source_of(profile, 'max_tasks_per_day')})"]
+        lines.append(tr(lang, "rule_focus", spans=spans, source=source_of(profile, "focus")))
+    lines += [tr(lang, "rule_buffer", n=profile["buffer_min"], source=source_of(profile, "buffer_min")),
+              tr(lang, "rule_blocks", max=profile["max_block_min"], brk=profile["break_min"],
+                 source=source_of(profile, "max_block_min")),
+              tr(lang, "rule_cap", n=profile["max_tasks_per_day"], source=source_of(profile, "max_tasks_per_day"))]
     return lines
 
 
@@ -108,12 +107,13 @@ def plan_day(day: date, events: list[Event], tasks: list[Task], profile: dict,
              factors: dict[str, tuple[float, int]], now: datetime | None = None,
              warnings: list[str] | None = None) -> Plan:
     warnings = list(warnings or [])
+    lang = profile.get("language", "en")
     todays = [e for e in events if e.end > datetime.combine(day, datetime.min.time())
               and e.start < datetime.combine(day, datetime.min.time()) + timedelta(days=1)]
     open_tasks = sorted(tasks, key=lambda t: (t.due is None, t.due or date.max, t.priority, t.id))
     if day.isoweekday() not in profile["workdays"]:
-        dropped = [Dropped(t, "non_workday", f"{day.isoformat()} is not one of your workdays "
-                           f"(rule workdays, {source_of(profile, 'workdays')})") for t in open_tasks]
+        dropped = [Dropped(t, "non_workday", tr(lang, "drop_nonworkday", day=day.isoformat(),
+                                                source=source_of(profile, "workdays"))) for t in open_tasks]
         return Plan(day, None, [], todays, [], dropped, 0, 0, warnings)
 
     start_text, end_text = profile["work_hours"]
@@ -131,8 +131,8 @@ def plan_day(day: date, events: list[Event], tasks: list[Task], profile: dict,
     cap = profile["max_tasks_per_day"]
     chosen, dropped = open_tasks[:cap], []
     for task in open_tasks[cap:]:
-        dropped.append(Dropped(task, "daily_cap", f"not among the {cap} tasks of the day "
-                               f"(rule max_tasks_per_day, {source_of(profile, 'max_tasks_per_day')})"))
+        dropped.append(Dropped(task, "daily_cap", tr(lang, "drop_cap", cap=cap,
+                                                     source=source_of(profile, "max_tasks_per_day"))))
 
     blocks: list[Block] = []
     for task in chosen:
@@ -152,19 +152,18 @@ def plan_day(day: date, events: list[Event], tasks: list[Task], profile: dict,
             pick["start"] = pick["start"] + need + timedelta(minutes=profile["break_min"])
         if len(placed) < len(sizes):
             fit = sum(int((e - s).total_seconds() // 60) for s, e, _ in placed)
-            dropped.append(Dropped(task, "no_room", f"needs {planned} min in blocks of at most "
-                                   f"{profile['max_block_min']}; only {fit} min fit before {end_text} "
-                                   f"(short by {planned - fit} min)"))
+            dropped.append(Dropped(task, "no_room", tr(lang, "drop_noroom", planned=planned,
+                                                       max=profile["max_block_min"], fit=fit, end=end_text,
+                                                       short=planned - fit)))
             continue
         slots = trial
         placed.sort()
         for index, (b_start, b_end, in_focus) in enumerate(placed, 1):
             blocks.append(Block(b_start, b_end, task.id, task.name, index, len(placed), in_focus,
-                                _why(task, planned, factor, in_focus, day)))
+                                _why(task, planned, factor, in_focus, day, lang)))
     blocks.sort(key=lambda b: b.start)
     planned_total = sum(b.minutes for b in blocks)
     if dropped and any(d.code == "no_room" for d in dropped):
-        warnings.append("The day is full: " + ", ".join(d.task.name for d in dropped if d.code == "no_room")
-                        + " does not fit. Move it, shorten it, or free time.")
+        warnings.append(tr(lang, "day_full", names=", ".join(d.task.name for d in dropped if d.code == "no_room")))
     return Plan(day, window, blocks, todays, protected, dropped, free_min, planned_total, warnings,
                 rules_used(profile))

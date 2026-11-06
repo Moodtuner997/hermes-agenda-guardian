@@ -154,6 +154,7 @@ def test_the_generated_script_runs_and_prints_the_brief(make_guardian, tmp_path,
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     cron = FakeCron()
     g = make_guardian(cron=cron, plugin_dir=ROOT)
+    commands.run(g, "set language=en")  # a user setting: the script must not depend on the machine's locale
     commands.run(g, 'add "Write the quote" 45m')
     commands.run(g, "cron on")
     # The script uses the real clock and the data folder under HERMES_HOME, like the scheduler would.

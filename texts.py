@@ -1,0 +1,296 @@
+"""Every sentence the plugin says to a person, in English and French. English is the reference: a key missing
+from FR falls back to it, so a new message never crashes a French session."""
+
+from __future__ import annotations
+
+EN = {
+    # --- parsing ---------------------------------------------------------------------------------------------
+    "bad_duration": "'{text}' is not a duration (examples: 45, 45m, 1h, 1h30)",
+    "bad_day": "'{text}' is not a day (use today, tomorrow, +3, fri or 2026-11-12)",
+    # --- rule validation -------------------------------------------------------------------------------------
+    "bad_time": "'{text}' is not a time (use HH:MM, 24 hour clock)",
+    "bad_range": "'{text}' is not a time range (use HH:MM-HH:MM)",
+    "range_backwards": "'{text}' ends before it starts",
+    "workdays_empty": "workdays needs at least one day (for example 1-5 or mon-fri)",
+    "bad_weekday": "'{text}' is not a weekday (1 = Monday ... 7 = Sunday, or mon..sun)",
+    "protected_form": "protected looks like lunch@12:30-13:30,gym@18:00-19:00 (or none)",
+    "language_values": "language must be en or fr",
+    "unknown_tz": "unknown timezone '{text}' (example: Europe/Paris; on Windows the tzdata package must be "
+                  "installed). Leave it empty to use this computer's clock.",
+    "int_needed": "{key} must be a whole number between {low} and {high}",
+    "int_range": "{key} must be between {low} and {high}",
+    "bad_calendar": "calendar must be none, google, ics:<file or https URL>, file:<json file> or "
+                    "cmd:<program that prints event JSON; {{start}} and {{end}} are filled in>",
+    "cmd_needs": "cmd: needs a program to run",
+    "category_form": "category looks like admin:20 (typical minutes) or admin:none to remove it",
+    "category_whole": "category minutes must be a whole number",
+    "category_range": "category minutes must be between 5 and 480",
+    "unknown_setting": "unknown setting '{key}'. Known: {known}",
+    "set_by_you": "you set it on {when}",
+    "set_auto": "detected in your Hermes profile on {when}",
+    "set_default": "default, not set by you yet",
+    # --- rules and tasks -------------------------------------------------------------------------------------
+    "set_nothing": "Nothing to set. Example: /day set work_hours=09:00-17:30",
+    "set_ok": "ok  {line}",
+    "set_refused": "refused  {key}: {why}",
+    "no_rules_warning": "None of your planning rules are set yet, so defaults are used. Run /day setup.",
+    "cal_unreadable": "Calendar unreadable ({why}): the plan ignores your meetings.",
+    "add_name": 'Give the task a name: /day add "Write the quote" 45m',
+    "add_estimate": "How long do you think it will take? Add an estimate, e.g. /day add \"{name}\" 45m "
+                    "(the planner learns from the gap between this and the real time).",
+    "add_range": "An estimate must be between 5 minutes and 8 hours; split bigger tasks.",
+    "add_priority": "Priority is 1 (most important), 2 or 3.",
+    "added": "Added #{id}: {name} ({minutes} min, {category}, priority {priority}{tail})",
+    "due_tail": ", due {day}",
+    "tasks_none": 'No open task. Add one: /day add "Write the quote" 45m',
+    "task_due": " due {day}",
+    "done_need": "How long did '{name}' really take? /day done {id} <minutes> - that measurement is what makes "
+                 "the next plan honest.",
+    "done_range": "The real time must be between 1 minute and 16 hours.",
+    "done_start": "{count} finished '{category}' task(s); calibration starts at {min}.",
+    "done_now": "'{category}' estimates are now multiplied by {factor:g} ({count} measurements).",
+    "done_msg": "Done #{id} {name}: {actual} min for an estimate of {est}. {calib}",
+    "dropped": "Dropped #{id} {name}",
+    # --- scheduling ------------------------------------------------------------------------------------------
+    "need_session": "Scheduling needs a running Hermes session: send /day cron {action} from a chat.",
+    "jobs_failed": "Hermes did not list its cron jobs, so nothing was changed ({why}).",
+    "job_refused": "Hermes refused the {what} job: {why}",
+    "scheduled": "Scheduled: a morning brief at {time} on your workdays, and a reminder check every 5 minutes "
+                 "during work hours (it speaks only when a block is about to start or ended). Both run a small "
+                 "script, no model call, no token cost. Scripts: {scripts}. Turn off: /day cron off",
+    "unscheduled": "Removed {n} scheduled job(s).",
+    "unscheduled_none": "Nothing was scheduled.",
+    "sched_status": "Scheduled: {names}",
+    "sched_status_none": "Nothing scheduled. Turn on: /day cron on 07:30",
+    # --- commands --------------------------------------------------------------------------------------------
+    "quote": "unbalanced quote in the command ({why})",
+    "p_value": "p= must be 1, 2 or 3",
+    "key_value": "'{token}' is not key=value. Example: /day set buffer_min=10",
+    "done_usage": "/day done <# or name> <real minutes>",
+    "drop_usage": "/day drop <# or name>",
+    "cron_usage": "/day cron on [HH:MM] [deliver=telegram] | off | status",
+    "unknown_cmd": "Unknown command '{command}'.",
+    "nothing_now": "(nothing to say right now)",
+    "help": """/day setup [auto]                  the rules to answer (work hours, focus, durations, calendar); auto adopts what Hermes already knows
+/day set key=value ...             answer them, e.g. /day set work_hours=09:00-17:30 calendar=google
+/day add "name" 45m [cat=admin] [p=1] [due=fri]   a task with YOUR estimate
+/day list                          open tasks
+/day plan [today|tomorrow|2026-11-12]   the plan, each block with its reason
+/day now                           what to do right now
+/day done <# or name> <real minutes>    log the real time (this calibrates the plan)
+/day drop <# or name>              forget a task
+/day brief                         the morning brief (today, or tomorrow after work hours)
+/day cron on [HH:MM] [deliver=..]  send the brief every workday morning and remind you when a block starts
+/day cron off | status             stop / check those two scheduled jobs (no model call, no token cost)""",
+    # --- planner ---------------------------------------------------------------------------------------------
+    "why_factor": "{planned} min = your estimate {est} x {value:g} (median of {count} finished '{category}' tasks)",
+    "why_count": "{planned} min = your estimate ({count} finished '{category}' task{s}; calibration starts at 3)",
+    "why_none": "{planned} min = your estimate (no finished '{category}' task yet)",
+    "why_overdue": "overdue since {day}",
+    "why_due": "due {day}",
+    "why_priority": "priority {n}",
+    "why_focus": "in your focus window",
+    "rule_hours": "work hours {start}-{end} ({source})",
+    "rule_protected": "{name} {start}-{end} kept free ({source})",
+    "rule_focus": "focus window {spans} for priority 1 ({source})",
+    "rule_buffer": "{n} min around meetings ({source})",
+    "rule_blocks": "blocks of at most {max} min, {brk} min break ({source})",
+    "rule_cap": "at most {n} tasks a day ({source})",
+    "drop_nonworkday": "{day} is not one of your workdays (rule workdays, {source})",
+    "drop_cap": "not among the {cap} tasks of the day (rule max_tasks_per_day, {source})",
+    "drop_noroom": "needs {planned} min in blocks of at most {max}; only {fit} min fit before {end} "
+                   "(short by {short} min)",
+    "day_full": "The day is full: {names} does not fit. Move it, shorten it, or free time.",
+    # --- calendar sources ------------------------------------------------------------------------------------
+    "no_calendar": "No calendar connected: the plan ignores your meetings. Connect one with "
+                   "/day set calendar=google (or ics:<file or URL>), or run /day setup.",
+    "plain_http": "The calendar URL is plain http: anyone on the network can read it",
+    "recurring": "{n} recurring event(s) repeat monthly or yearly; only their first date is read, so later "
+                 "repeats are missing from the plan",
+    # --- setup -----------------------------------------------------------------------------------------------
+    "setup_title": "Agenda guardian setup - about 3 minutes, refine anything later",
+    "setup_count": "({n} rule(s) set by you so far; the rest are defaults)",
+    "found_head": "Found in your Hermes profile",
+    "found_tz": "[ok] Time zone: {tz}",
+    "found_cal_ok": "[ok] Calendar ({kind}): readable, {n} event(s) today",
+    "found_cal_bad": "[!!] Calendar ({kind}): {why}",
+    "found_google": "[ok] Google Calendar: the google-workspace skill is connected, {n} event(s) today",
+    "found_google_bad": "[!!] Google Calendar: skill found but not readable yet ({why})",
+    "found_google_off": "[..] Google Calendar: the google-workspace skill is not installed; use "
+                        "calendar=ics:<URL or file> or calendar=file:<json>",
+    "found_jobs": "[..] Reminders already scheduled ({n}): {jobs} (left untouched)",
+    "found_no_jobs": "[..] No reminder scheduled yet (the plugin can add two: /day cron on)",
+    "found_lang": "[ok] Language: {lang}",
+    "adopt": "Adopt what was found in one go: /day setup auto",
+    "rules_head": "Your rules (answer with one line, keep the defaults that suit you)",
+    "rule_line_hours": "work_hours=09:00-17:30   now {value} [{source}]",
+    "rule_line_protected": "protected=lunch@12:30-13:30   now {value} [{source}]",
+    "rule_line_focus": "focus=09:00-11:30   now {value} [{source}]   (kept for priority 1 tasks)",
+    "rule_line_calendar": "calendar=google | ics:<file or https URL> | file:<json> | none   now {value}",
+    "rule_line_language": "language=en | fr   now {value}",
+    "fine_tune": "Fine tuning, whenever: workdays={days} max_block_min={block} break_min={brk} buffer_min={buf} "
+                 "max_tasks_per_day={cap}. Typical minutes per kind of task: {cats}   category=admin:20 category=writing:60",
+    "next_steps": 'Then: /day add "Write the quote" 45m, then /day plan. After each task, tell me the real time: '
+                  "/day done <task> <minutes>. From the third finished task of a kind, the plan multiplies your "
+                  "estimate by your median error and says so. Reminders: /day cron on.",
+    "none": "none",
+    "none_yet": "none yet",
+    "auto_done": "Adopted from your Hermes profile:",
+    "auto_nothing": "Nothing more to adopt: everything found is already set.",
+    "auto_skip_cal": "Calendar not adopted: {why}",
+    "agent_hint": "For the agent: before asking the user anything, use what you already know of them (memory, "
+                  "profile notes, existing reminders, connected calendar) to propose each answer, then ask only to "
+                  "confirm or complete. Speak the user's language. Save answers with the 'settings' argument.",
+    "unnamed": "(unnamed)",
+    "found_google_nosignin": "[!!] Google Calendar: the google-workspace skill is installed but not signed in yet "
+                             "(run its own setup first)",
+    "ref_number": "no open task number {ref}",
+    "ref_none": "no open task matches '{ref}'",
+    "ref_several": "'{ref}' matches several tasks ({names}); use the number",
+}
+
+FR = {
+    "bad_duration": "« {text} » n'est pas une durée (exemples : 45, 45m, 1h, 1h30)",
+    "bad_day": "« {text} » n'est pas un jour (utilise aujourd'hui, demain, +3, ven ou 2026-11-12)",
+    "bad_time": "« {text} » n'est pas une heure (format HH:MM, 24 h)",
+    "bad_range": "« {text} » n'est pas une plage horaire (format HH:MM-HH:MM)",
+    "range_backwards": "« {text} » finit avant de commencer",
+    "workdays_empty": "workdays demande au moins un jour (par exemple 1-5 ou lun-ven)",
+    "bad_weekday": "« {text} » n'est pas un jour de la semaine (1 = lundi ... 7 = dimanche, ou lun..dim)",
+    "protected_form": "protected s'écrit déjeuner@12:30-13:30,sport@18:00-19:00 (ou none)",
+    "language_values": "language doit valoir en ou fr",
+    "unknown_tz": "fuseau horaire inconnu « {text} » (exemple : Europe/Paris ; sous Windows, le paquet tzdata doit "
+                  "être installé). Laisse vide pour utiliser l'horloge de cet ordinateur.",
+    "int_needed": "{key} doit être un nombre entier entre {low} et {high}",
+    "int_range": "{key} doit être compris entre {low} et {high}",
+    "bad_calendar": "calendar vaut none, google, ics:<fichier ou URL https>, file:<fichier json> ou "
+                    "cmd:<programme qui affiche des événements en JSON ; {{start}} et {{end}} sont remplis>",
+    "cmd_needs": "cmd: demande un programme à lancer",
+    "category_form": "category s'écrit admin:20 (minutes habituelles) ou admin:none pour la retirer",
+    "category_whole": "les minutes d'une catégorie sont un nombre entier",
+    "category_range": "les minutes d'une catégorie sont comprises entre 5 et 480",
+    "unknown_setting": "réglage inconnu « {key} ». Connus : {known}",
+    "set_by_you": "tu l'as réglé le {when}",
+    "set_auto": "détecté dans ton profil Hermes le {when}",
+    "set_default": "valeur par défaut, pas encore réglée par toi",
+    "set_nothing": "Rien à régler. Exemple : /day set work_hours=09:00-17:30",
+    "set_ok": "ok  {line}",
+    "set_refused": "refusé  {key} : {why}",
+    "no_rules_warning": "Aucune de tes règles n'est encore réglée : les valeurs par défaut servent. "
+                        "Lance /day setup.",
+    "cal_unreadable": "Agenda illisible ({why}) : le plan ignore tes réunions.",
+    "add_name": 'Donne un nom à la tâche : /day add "Rédiger le devis" 45m',
+    "add_estimate": "Combien de temps penses-tu y passer ? Ajoute une estimation, par exemple /day add \"{name}\" "
+                    "45m (le plan apprend de l'écart entre elle et le temps réel).",
+    "add_range": "Une estimation va de 5 minutes à 8 heures ; découpe les tâches plus grosses.",
+    "add_priority": "La priorité vaut 1 (la plus importante), 2 ou 3.",
+    "added": "Ajouté n°{id} : {name} ({minutes} min, {category}, priorité {priority}{tail})",
+    "due_tail": ", pour le {day}",
+    "tasks_none": 'Aucune tâche ouverte. Ajoutes-en une : /day add "Rédiger le devis" 45m',
+    "task_due": " pour le {day}",
+    "done_need": "Combien de temps « {name} » a-t-il vraiment pris ? /day done {id} <minutes> : cette mesure rend "
+                 "le prochain plan honnête.",
+    "done_range": "Le temps réel va de 1 minute à 16 heures.",
+    "done_start": "{count} tâche(s) « {category} » terminée(s) ; le calibrage démarre à {min}.",
+    "done_now": "Les estimations « {category} » sont maintenant multipliées par {factor:g} ({count} mesures).",
+    "done_msg": "Terminé n°{id} {name} : {actual} min pour une estimation de {est}. {calib}",
+    "dropped": "Oublié n°{id} {name}",
+    "need_session": "La planification demande une session Hermes en marche : envoie /day cron {action} depuis une "
+                    "conversation.",
+    "jobs_failed": "Hermes n'a pas listé ses tâches planifiées, rien n'a été changé ({why}).",
+    "job_refused": "Hermes a refusé la tâche {what} : {why}",
+    "scheduled": "Planifié : un brief le matin à {time} les jours travaillés, et un contrôle des rappels toutes les "
+                 "5 minutes pendant les heures de travail (il ne parle que lorsqu'un bloc va commencer ou vient de "
+                 "finir). Les deux lancent un petit script, sans modèle, sans coût en jetons. Scripts : {scripts}. "
+                 "Pour arrêter : /day cron off",
+    "unscheduled": "{n} tâche(s) planifiée(s) retirée(s).",
+    "unscheduled_none": "Rien n'était planifié.",
+    "sched_status": "Planifié : {names}",
+    "sched_status_none": "Rien de planifié. Pour activer : /day cron on 07:30",
+    "quote": "guillemet non fermé dans la commande ({why})",
+    "p_value": "p= vaut 1, 2 ou 3",
+    "key_value": "« {token} » n'est pas de la forme clé=valeur. Exemple : /day set buffer_min=10",
+    "done_usage": "/day done <n° ou nom> <minutes réelles>",
+    "drop_usage": "/day drop <n° ou nom>",
+    "cron_usage": "/day cron on [HH:MM] [deliver=telegram] | off | status",
+    "unknown_cmd": "Commande inconnue « {command} ».",
+    "nothing_now": "(rien à dire pour l'instant)",
+    "help": """/day setup [auto]                  les réglages à faire (horaires, concentration, durées, agenda) ; auto reprend ce que Hermes sait déjà
+/day set clé=valeur ...            les régler, ex. /day set work_hours=09:00-17:30 calendar=google
+/day add "nom" 45m [cat=admin] [p=1] [due=ven]   une tâche avec TON estimation
+/day list                          les tâches ouvertes
+/day plan [today|demain|2026-11-12]     le plan, chaque bloc avec sa raison
+/day now                           quoi faire maintenant
+/day done <n° ou nom> <minutes réelles>     noter le temps réel (c'est ce qui calibre le plan)
+/day drop <n° ou nom>              oublier une tâche
+/day brief                         le brief du matin (aujourd'hui, ou demain après les heures de travail)
+/day cron on [HH:MM] [deliver=..]  envoyer le brief chaque matin travaillé et te prévenir quand un bloc commence
+/day cron off | status             arrêter / vérifier ces deux tâches planifiées (sans modèle, sans coût en jetons)""",
+    "why_factor": "{planned} min = ton estimation {est} x {value:g} (médiane de {count} tâches « {category} » "
+                  "terminées)",
+    "why_count": "{planned} min = ton estimation ({count} tâche{s} « {category} » terminée{s} ; le calibrage "
+                 "démarre à 3)",
+    "why_none": "{planned} min = ton estimation (aucune tâche « {category} » terminée pour l'instant)",
+    "why_overdue": "en retard depuis le {day}",
+    "why_due": "pour le {day}",
+    "why_priority": "priorité {n}",
+    "why_focus": "dans ta plage de concentration",
+    "rule_hours": "heures de travail {start}-{end} ({source})",
+    "rule_protected": "{name} {start}-{end} laissé libre ({source})",
+    "rule_focus": "plage de concentration {spans} pour la priorité 1 ({source})",
+    "rule_buffer": "{n} min autour des réunions ({source})",
+    "rule_blocks": "blocs de {max} min au plus, pause de {brk} min ({source})",
+    "rule_cap": "{n} tâches par jour au plus ({source})",
+    "drop_nonworkday": "le {day} n'est pas un de tes jours travaillés (règle workdays, {source})",
+    "drop_cap": "ne fait pas partie des {cap} tâches du jour (règle max_tasks_per_day, {source})",
+    "drop_noroom": "demande {planned} min en blocs de {max} au plus ; seulement {fit} min tiennent avant {end} "
+                   "(il en manque {short})",
+    "day_full": "La journée est pleine : {names} ne tient pas. Déplace-la, raccourcis-la ou libère du temps.",
+    "no_calendar": "Aucun agenda connecté : le plan ignore tes réunions. Connectes-en un avec "
+                   "/day set calendar=google (ou ics:<fichier ou URL>), ou lance /day setup.",
+    "plain_http": "L'URL de l'agenda est en http simple : quiconque est sur le réseau peut la lire",
+    "recurring": "{n} événement(s) récurrent(s) se répètent chaque mois ou chaque année ; seule leur première date "
+                 "est lue, les répétitions suivantes manquent donc au plan",
+    "setup_title": "Réglage de l'agenda guardian - environ 3 minutes, tu pourras tout affiner plus tard",
+    "setup_count": "({n} règle(s) réglée(s) par toi pour l'instant ; les autres sont des valeurs par défaut)",
+    "found_head": "Ce que j'ai trouvé dans ton profil Hermes",
+    "found_tz": "[ok] Fuseau horaire : {tz}",
+    "found_cal_ok": "[ok] Agenda ({kind}) : lisible, {n} événement(s) aujourd'hui",
+    "found_cal_bad": "[!!] Agenda ({kind}) : {why}",
+    "found_google": "[ok] Google Agenda : la compétence google-workspace est connectée, {n} événement(s) aujourd'hui",
+    "found_google_bad": "[!!] Google Agenda : compétence trouvée mais pas encore lisible ({why})",
+    "found_google_off": "[..] Google Agenda : la compétence google-workspace n'est pas installée ; utilise "
+                       "calendar=ics:<URL ou fichier> ou calendar=file:<json>",
+    "found_jobs": "[..] Rappels déjà planifiés ({n}) : {jobs} (je n'y touche pas)",
+    "found_no_jobs": "[..] Aucun rappel planifié pour l'instant (le plugin peut en ajouter deux : /day cron on)",
+    "found_lang": "[ok] Langue : {lang}",
+    "adopt": "Tout adopter d'un coup : /day setup auto",
+    "rules_head": "Tes règles (réponds en une ligne, garde les valeurs par défaut qui te conviennent)",
+    "rule_line_hours": "work_hours=09:00-17:30   actuellement {value} [{source}]",
+    "rule_line_protected": "protected=déjeuner@12:30-13:30   actuellement {value} [{source}]",
+    "rule_line_focus": "focus=09:00-11:30   actuellement {value} [{source}]   (gardée pour les tâches de priorité 1)",
+    "rule_line_calendar": "calendar=google | ics:<fichier ou URL https> | file:<json> | none   actuellement {value}",
+    "rule_line_language": "language=en | fr   actuellement {value}",
+    "fine_tune": "Pour affiner, quand tu veux : workdays={days} max_block_min={block} break_min={brk} "
+                 "buffer_min={buf} max_tasks_per_day={cap}. Minutes habituelles par type de tâche : {cats}   "
+                 "category=admin:20 category=ecriture:60",
+    "next_steps": 'Ensuite : /day add "Rédiger le devis" 45m, puis /day plan. Après chaque tâche, donne le temps '
+                  "réel : /day done <tâche> <minutes>. Dès la troisième tâche terminée d'un type, le plan multiplie "
+                  "ton estimation par ton erreur médiane et le dit. Rappels : /day cron on.",
+    "none": "aucun",
+    "none_yet": "aucune pour l'instant",
+    "auto_done": "Repris de ton profil Hermes :",
+    "auto_nothing": "Rien de plus à reprendre : tout ce qui a été trouvé est déjà réglé.",
+    "auto_skip_cal": "Agenda non repris : {why}",
+    "unnamed": "(sans nom)",
+    "found_google_nosignin": "[!!] Google Agenda : la compétence google-workspace est installée mais pas encore "
+                             "connectée (lance d'abord son propre réglage)",
+    "ref_number": "aucune tâche ouverte n°{ref}",
+    "ref_none": "aucune tâche ouverte ne correspond à « {ref} »",
+    "ref_several": "« {ref} » correspond à plusieurs tâches ({names}) ; utilise le numéro",
+}
+
+
+def tr(lang: str, key: str, /, **kw) -> str:
+    text = (FR if lang == "fr" and key in FR else EN)[key]
+    return text.format(**kw) if kw else text.replace("{{", "{").replace("}}", "}")

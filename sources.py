@@ -11,6 +11,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 
 from .model import Event
+from .texts import tr
 
 TIMEOUT = 25
 GOOGLE_SCRIPT = Path("skills") / "productivity" / "google-workspace" / "scripts" / "google_api.py"
@@ -161,7 +162,8 @@ def _occurrences(start: datetime, rule: dict[str, str], skip: set[date], lo: dat
             yield moment
 
 
-def parse_ics(text: str, day: date, tzname: str = "", warnings: list[str] | None = None) -> list[Event]:
+def parse_ics(text: str, day: date, tzname: str = "", warnings: list[str] | None = None,
+              lang: str = "en") -> list[Event]:
     lo, hi = _day_bounds(day)
     warnings = warnings if warnings is not None else []
     events: list[Event] = []
@@ -211,8 +213,7 @@ def parse_ics(text: str, day: date, tzname: str = "", warnings: list[str] | None
         elif body is not None:
             body.append(line)
     if unsupported:
-        warnings.append(f"{unsupported} recurring event(s) repeat monthly or yearly; only their first date is "
-                        "read, so later repeats are missing from the plan")
+        warnings.append(tr(lang, "recurring", n=unsupported))
     return events
 
 
@@ -239,11 +240,11 @@ def fetch_events(profile: dict, day: date, home: Path, *, run=subprocess.run,
     """Events touching ``day`` and warnings. Raises SourceError when the source is configured but unreadable."""
     source = profile.get("calendar") or {"type": "none"}
     kind, tzname = source.get("type", "none"), profile.get("timezone", "")
+    lang = profile.get("language", "en")
     warnings: list[str] = []
     lo, hi = _day_bounds(day)
     if kind == "none":
-        return [], ["No calendar connected: the plan ignores your meetings. Connect one with "
-                    "/day set calendar=google (or ics:<file or URL>)."]
+        return [], [tr(lang, "no_calendar")]
     if kind in ("google", "command"):
         start_iso = _aware(lo, tzname).astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
         end_iso = _aware(hi, tzname).astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -266,7 +267,7 @@ def fetch_events(profile: dict, day: date, home: Path, *, run=subprocess.run,
         try:
             if location.startswith(("http://", "https://")):
                 if location.startswith("http://"):
-                    warnings.append("The calendar URL is plain http: anyone on the network can read it")
+                    warnings.append(tr(lang, "plain_http"))
                 request = urllib.request.Request(location, headers={"User-Agent": "hermes-agenda-guardian"})
                 with urlopen(request, timeout=TIMEOUT) as response:
                     text = response.read().decode("utf-8", "replace")
@@ -274,7 +275,7 @@ def fetch_events(profile: dict, day: date, home: Path, *, run=subprocess.run,
                 text = Path(location).read_text(encoding="utf-8", errors="replace")
         except OSError as exc:
             raise SourceError(f"cannot read the ICS calendar: {exc}")
-        events = parse_ics(text, day, tzname, warnings)
+        events = parse_ics(text, day, tzname, warnings, lang)
     else:
         raise SourceError(f"unknown calendar type '{kind}'")
     events = sorted((e for e in events if e.end > lo and e.start < hi), key=lambda e: (e.start, e.end))

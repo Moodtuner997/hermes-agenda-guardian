@@ -11,8 +11,9 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
-from . import brief, planner, profile as prof, sources, store
+from . import brief, discover, planner, profile as prof, sources, store
 from .model import Block, Plan, Task
+from .texts import tr
 
 JOB_BRIEF, JOB_NUDGE = "agenda-guardian-brief", "agenda-guardian-nudge"
 SCRIPT_TEMPLATE = '''"""Written by the agenda-guardian plugin (/day cron on). It only prints text for the cron job to deliver."""
@@ -31,26 +32,27 @@ if text:
     print(text)
 '''
 
-_WEEKDAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+_WEEKDAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6,
+             "lun": 0, "mar": 1, "mer": 2, "jeu": 3, "ven": 4, "sam": 5, "dim": 6}
 
 
 class UserError(ValueError):
     """A mistake in what the user typed; the message tells them how to fix it."""
 
 
-def parse_minutes(text: str) -> int:
+def parse_minutes(text: str, lang: str = "en") -> int:
     text = text.strip().lower()
-    match = re.fullmatch(r"(?:(\d+)\s*h(?:ours?)?)?\s*(?:(\d+)\s*(?:m|min|mins|minutes?)?)?", text)
+    match = re.fullmatch(r"(?:(\d+)\s*h(?:ours?|eures?)?)?\s*(?:(\d+)\s*(?:m|min|mins|minutes?)?)?", text)
     if not text or not match or not (match.group(1) or match.group(2)):
-        raise UserError(f"'{text}' is not a duration (examples: 45, 45m, 1h, 1h30)")
+        raise UserError(tr(lang, "bad_duration", text=text))
     return int(match.group(1) or 0) * 60 + int(match.group(2) or 0)
 
 
-def parse_day(text: str, today: date) -> date:
+def parse_day(text: str, today: date, lang: str = "en") -> date:
     text = text.strip().lower()
-    if text in ("", "today"):
+    if text in ("", "today", "aujourd'hui", "auj"):
         return today
-    if text == "tomorrow":
+    if text in ("tomorrow", "demain"):
         return today + timedelta(days=1)
     if re.fullmatch(r"\+\d{1,3}d?", text):
         return today + timedelta(days=int(text.strip("+d")))
@@ -59,7 +61,7 @@ def parse_day(text: str, today: date) -> date:
     try:
         return date.fromisoformat(text)
     except ValueError:
-        raise UserError(f"'{text}' is not a day (use today, tomorrow, +3, fri or 2026-11-12)")
+        raise UserError(tr(lang, "bad_day", text=text))
 
 
 class Guardian:
@@ -81,105 +83,186 @@ class Guardian:
         return self._now().replace(tzinfo=None, microsecond=0)
 
     def profile(self) -> dict:
-        return store.load_profile(self.conn)
+        """The stored rules; language and time zone, until the user sets them, come from the Hermes profile."""
+        p = store.load_profile(self.conn)
+        if not prof.is_set(p, "language"):
+            p["language"] = discover.language(self.home) or "en"
+        if not prof.is_set(p, "timezone"):
+            p["timezone"] = discover.timezone(self.home)
+        if p["language"] == "fr" and not prof.is_set(p, "protected"):
+            p["protected"] = [dict(x, name="déjeuner" if x["name"] == "lunch" else x["name"]) for x in p["protected"]]
+        return p
+
+    def lang(self) -> str:
+        return self.profile()["language"]
 
     # --- rules -------------------------------------------------------------------------------------------
     def set_rules(self, pairs: list[tuple[str, str]]) -> str:
         profile, lines = self.profile(), []
         for key, value in pairs:
             try:
-                lines.append("ok  " + prof.apply_setting(profile, key, value, self.now().date()))
+                lines.append(tr(profile["language"], "set_ok", line=prof.apply_setting(profile, key, value, self.now().date())))
             except ValueError as exc:
-                lines.append(f"refused  {key}: {exc}")
+                lines.append(tr(profile["language"], "set_refused", key=key, why=exc))
         store.save_profile(self.conn, profile)
-        return "\n".join(lines) if lines else "Nothing to set. Example: /day set work_hours=09:00-17:30"
+        return "\n".join(lines) if lines else tr(profile["language"], "set_nothing")
+
+    # --- onboarding --------------------------------------------------------------------------------------------
+    def detect(self) -> dict:
+        return {"timezone": discover.timezone(self.home), "language": discover.language(self.home),
+                "google": discover.google_state(self.home), "jobs": discover.other_jobs(self.home)}
+
+    def _probe(self, profile: dict) -> tuple[bool, str]:
+        """Read today's events from the profile's calendar: (True, count) or (False, reason)."""
+        try:
+            events, _ = sources.fetch_events(profile, self.now().date(), self.home, run=self._run, urlopen=self._urlopen)
+        except sources.SourceError as exc:
+            return False, str(exc)
+        return True, str(len(events))
+
+    def _adoptable(self, profile: dict, found: dict) -> dict:
+        todo = {}
+        if not prof.is_set(profile, "language") and found["language"]:
+            todo["language"] = found["language"]
+        if not prof.is_set(profile, "timezone") and found["timezone"]:
+            todo["timezone"] = found["timezone"]
+        if profile["calendar"]["type"] == "none" and found["google"] == "ready":
+            todo["calendar"] = "google"
+        return todo
+
+    def facts(self) -> dict:
+        """What setup found, as data for an agent: nothing here is an answer of the user."""
+        p, found = self.profile(), self.detect()
+        return {"language": p["language"], "timezone": p["timezone"], "google_calendar": found["google"],
+                "calendar": p["calendar"]["type"], "other_reminders": [f"{n} ({s})" for n, s in found["jobs"]],
+                "can_adopt": self._adoptable(p, found), "rules_set_by_user": sorted(p["_set"])}
 
     def setup_text(self) -> str:
-        p = self.profile()
-        cats = ", ".join(f"{k} {v} min" for k, v in sorted(p["categories"].items())) or "none yet"
+        p, found = self.profile(), self.detect()
+        lang = p["language"]
+
+        def T(key, **kw):
+            return tr(lang, key, **kw)
+
+        out = [T("setup_title"), T("setup_count", n=len(p["_set"])), "", T("found_head")]
+        if p["timezone"]:
+            out.append("  " + T("found_tz", tz=p["timezone"]))
         cal = p["calendar"]
-        cal_text = cal["type"] + (f" ({cal.get('path') or ' '.join(cal.get('argv', []))})" if cal["type"] != "none" else "")
-        protected = ", ".join(f"{x['name']} {x['start']}-{x['end']}" for x in p["protected"]) or "none"
-        focus = ", ".join(f"{x['start']}-{x['end']}" for x in p["focus"]) or "none"
-        n = len(p["_set"])
-        return "\n".join([
-            "Agenda guardian setup (answer any of these; each answer is one /day set line)",
-            f"({n} rule(s) set by you so far; the rest are defaults)",
-            "",
-            f"1. Work hours: {p['work_hours'][0]}-{p['work_hours'][1]} [{prof.source_of(p, 'work_hours')}]   work_hours=09:00-17:30",
-            f"2. Workdays: {','.join(map(str, p['workdays']))} (1 = Monday) [{prof.source_of(p, 'workdays')}]   workdays=1-5",
-            f"3. Protected time that tasks never use: {protected} [{prof.source_of(p, 'protected')}]   protected=lunch@12:30-13:30",
-            f"4. Focus window, when your head is best (kept for priority 1 tasks): {focus} [{prof.source_of(p, 'focus')}]   focus=09:00-11:30",
-            f"5. Longest stretch before a break: {p['max_block_min']} min, break {p['break_min']} min "
-            f"[{prof.source_of(p, 'max_block_min')}]   max_block_min=50 break_min=10",
-            f"6. Space around meetings: {p['buffer_min']} min [{prof.source_of(p, 'buffer_min')}]   buffer_min=10",
-            f"7. Most tasks planned in one day: {p['max_tasks_per_day']} [{prof.source_of(p, 'max_tasks_per_day')}]   max_tasks_per_day=3",
-            f"8. Calendar: {cal_text}   calendar=google | ics:<file or https URL> | file:<json> | none",
-            f"9. How long do your usual tasks take? Typical minutes per kind: {cats}   category=admin:20 category=writing:60",
-            "   Then, after each task, tell me the real time: /day done <task> <minutes>. From the third finished task "
-            "of a kind, the plan multiplies your estimate by the median real/estimated ratio and says so.",
-            f"10. Language: {p['language']}   language=fr",
-        ])
+        if cal["type"] != "none":
+            ok, detail = self._probe(p)
+            out.append("  " + (T("found_cal_ok", kind=cal["type"], n=detail) if ok
+                               else T("found_cal_bad", kind=cal["type"], why=detail)))
+        elif found["google"] == "ready":
+            ok, detail = self._probe(dict(p, calendar={"type": "google"}))
+            out.append("  " + (T("found_google", n=detail) if ok else T("found_google_bad", why=detail)))
+        elif found["google"] == "skill_only":
+            out.append("  " + T("found_google_nosignin"))
+        else:
+            out.append("  " + T("found_google_off"))
+        if found["jobs"]:
+            shown = ", ".join(f"{name or T('unnamed')} ({when})" for name, when in found["jobs"][:5])
+            more = len(found["jobs"]) - 5
+            out.append("  " + T("found_jobs", n=len(found["jobs"]), jobs=shown + (f", +{more}" if more > 0 else "")))
+        else:
+            out.append("  " + T("found_no_jobs"))
+        if "calendar" in self._adoptable(p, found):
+            out.append("  " + T("adopt"))
+
+        cats = ", ".join(f"{k} {v} min" for k, v in sorted(p["categories"].items())) or T("none_yet")
+        cal_text = (cal["type"] + f" ({cal.get('path') or ' '.join(cal.get('argv', []))})") if cal["type"] != "none" else T("none")
+        protected = ", ".join(f"{x['name']} {x['start']}-{x['end']}" for x in p["protected"]) or T("none")
+        focus = ", ".join(f"{x['start']}-{x['end']}" for x in p["focus"]) or T("none")
+        out += ["", T("rules_head"),
+                "  " + T("rule_line_hours", value="-".join(p["work_hours"]), source=prof.source_of(p, "work_hours")),
+                "  " + T("rule_line_protected", value=protected, source=prof.source_of(p, "protected")),
+                "  " + T("rule_line_focus", value=focus, source=prof.source_of(p, "focus")),
+                "  " + T("rule_line_calendar", value=cal_text),
+                "  " + T("rule_line_language", value=lang),
+                "", T("fine_tune", days=",".join(map(str, p["workdays"])), block=p["max_block_min"],
+                      brk=p["break_min"], buf=p["buffer_min"], cap=p["max_tasks_per_day"], cats=cats),
+                "", T("next_steps")]
+        return "\n".join(out)
+
+    def setup_auto(self) -> str:
+        """Adopt what the Hermes profile already says: language, time zone and a working Google calendar."""
+        p, found = self.profile(), self.detect()
+        lang = p["language"]
+        todo, skipped = self._adoptable(p, found), ""
+        if "calendar" in todo:
+            ok, detail = self._probe(dict(p, calendar={"type": "google"}))
+            if not ok:
+                del todo["calendar"]
+                skipped = tr(lang, "auto_skip_cal", why=detail)
+        if not todo:
+            return "\n".join([tr(lang, "auto_nothing")] + ([skipped] if skipped else []))
+        today, lines = self.now().date(), []
+        for key, value in todo.items():
+            lines.append("ok  " + prof.apply_setting(p, key, value, today))
+            p["_set"][key] = "auto:" + today.isoformat()
+        store.save_profile(self.conn, p)
+        return "\n".join([tr(lang, "auto_done")] + lines + ([skipped] if skipped else []))
 
     # --- tasks -------------------------------------------------------------------------------------------
     def add(self, name: str, minutes: int | None = None, category: str = "", priority: int = 2,
             due: date | None = None) -> str:
         name = name.strip()
-        if not name:
-            raise UserError('Give the task a name: /day add "Write the quote" 45m')
         profile = self.profile()
+        lang = profile["language"]
+        if not name:
+            raise UserError(tr(lang, "add_name"))
         category = (category or "general").strip().lower()
         if minutes is None:
             minutes = profile["categories"].get(category)
             if minutes is None:
-                raise UserError("How long do you think it will take? Add an estimate, e.g. /day add \"%s\" 45m "
-                                "(the planner learns from the gap between this and the real time)." % name)
+                raise UserError(tr(lang, "add_estimate", name=name))
         if not 5 <= minutes <= 480:
-            raise UserError("An estimate must be between 5 minutes and 8 hours; split bigger tasks.")
+            raise UserError(tr(lang, "add_range"))
         if priority not in (1, 2, 3):
-            raise UserError("Priority is 1 (most important), 2 or 3.")
+            raise UserError(tr(lang, "add_priority"))
         task = store.add_task(self.conn, name, category, minutes, priority, due, self.now())
-        tail = f", due {due.isoformat()}" if due else ""
-        return f"Added #{task.id}: {name} ({minutes} min, {category}, priority {priority}{tail})"
+        tail = tr(lang, "due_tail", day=due.isoformat()) if due else ""
+        return tr(lang, "added", id=task.id, name=name, minutes=minutes, category=category, priority=priority, tail=tail)
 
     def tasks_text(self) -> str:
+        lang = self.lang()
         items = store.tasks(self.conn)
         if not items:
-            return 'No open task. Add one: /day add "Write the quote" 45m'
+            return tr(lang, "tasks_none")
         facs = store.factors(self.conn)
         lines = []
         for t in items:
             fac = facs.get(t.category, (1.0, 0))
             note = f" x{fac[0]:g}" if fac[1] >= store.MIN_SAMPLES and fac[0] != 1.0 else ""
-            due = f" due {t.due.isoformat()}" if t.due else ""
+            due = tr(lang, "task_due", day=t.due.isoformat()) if t.due else ""
             lines.append(f"#{t.id} {t.name} - {t.est_min} min{note}, {t.category}, p{t.priority}{due}")
         return "\n".join(lines)
 
     def done(self, ref: str, actual_min: int | None) -> str:
+        lang = self.lang()
         try:
-            task = store.find_task(self.conn, ref)
+            task = store.find_task(self.conn, ref, lang)
         except store.RefError as exc:
             raise UserError(str(exc))
         if actual_min is None:
-            raise UserError(f"How long did '{task.name}' really take? /day done {task.id} <minutes> - that "
-                            "measurement is what makes the next plan honest.")
+            raise UserError(tr(lang, "done_need", name=task.name, id=task.id))
         if not 1 <= actual_min <= 960:
-            raise UserError("The real time must be between 1 minute and 16 hours.")
+            raise UserError(tr(lang, "done_range"))
         store.finish_task(self.conn, task, actual_min, self.now())
         fac, count = store.factors(self.conn).get(task.category, (1.0, 1))
         if count < store.MIN_SAMPLES:
-            calib = f"{count} finished '{task.category}' task(s); calibration starts at {store.MIN_SAMPLES}."
+            calib = tr(lang, "done_start", count=count, category=task.category, min=store.MIN_SAMPLES)
         else:
-            calib = f"'{task.category}' estimates are now multiplied by {fac:g} ({count} measurements)."
-        return f"Done #{task.id} {task.name}: {actual_min} min for an estimate of {task.est_min}. {calib}"
+            calib = tr(lang, "done_now", category=task.category, factor=fac, count=count)
+        return tr(lang, "done_msg", id=task.id, name=task.name, actual=actual_min, est=task.est_min, calib=calib)
 
     def drop(self, ref: str) -> str:
+        lang = self.lang()
         try:
-            task = store.find_task(self.conn, ref)
+            task = store.find_task(self.conn, ref, lang)
         except store.RefError as exc:
             raise UserError(str(exc))
         store.drop_task(self.conn, task)
-        return f"Dropped #{task.id} {task.name}"
+        return tr(lang, "dropped", id=task.id, name=task.name)
 
     # --- plans -------------------------------------------------------------------------------------------
     def make_plan(self, day: date | None = None, from_now: bool = False,
@@ -188,13 +271,13 @@ class Guardian:
         day = day or now.date()
         warnings: list[str] = []
         if not profile["_set"]:
-            warnings.append("None of your planning rules are set yet, so defaults are used. Run /day setup.")
+            warnings.append(tr(profile["language"], "no_rules_warning"))
         try:
             events, more = sources.fetch_events(profile, day, self.home, run=self._run, urlopen=self._urlopen)
             warnings += more
         except sources.SourceError as exc:
             events = []
-            warnings.append(f"Calendar unreadable ({exc}): the plan ignores your meetings.")
+            warnings.append(tr(profile["language"], "cal_unreadable", why=exc))
         plan = planner.plan_day(day, events, store.tasks(self.conn), profile, store.factors(self.conn),
                                 now if from_now else None, warnings)
         if remember:
@@ -243,15 +326,15 @@ class Guardian:
     def _jobs(self) -> dict[str, str]:
         listed = self._cron({"action": "list"})
         if not isinstance(listed, dict) or listed.get("error") or not isinstance(listed.get("jobs"), list):
-            raise UserError("Hermes did not list its cron jobs, so nothing was changed "
-                            f"({(listed.get('error') if isinstance(listed, dict) else None) or 'unexpected answer'}).")
+            raise UserError(tr(self.lang(), "jobs_failed",
+                               why=(listed.get("error") if isinstance(listed, dict) else None) or "unexpected answer"))
         jobs = listed["jobs"]
         return {j["name"]: j.get("job_id") or j.get("id") for j in jobs
                 if isinstance(j, dict) and j.get("name") in (JOB_BRIEF, JOB_NUDGE) and (j.get("job_id") or j.get("id"))}
 
     def schedule(self, at_time: str = "", deliver: str = "") -> str:
         if self._cron is None:
-            raise UserError("Scheduling needs a running Hermes session: send /day cron on from a chat.")
+            raise UserError(tr(self.lang(), "need_session", action="on"))
         profile = self.profile()
         start_h, start_m = divmod(prof.minutes_of(profile["work_hours"][0]), 60)
         default = max(5 * 60, start_h * 60 + start_m - 30)
@@ -280,30 +363,30 @@ class Guardian:
             else:
                 reply = self._cron({"action": "create", "prompt": f"Run {script.name}", **args})
             if isinstance(reply, dict) and (reply.get("error") or reply.get("success") is False):
-                raise UserError(f"Hermes refused the {what} job: {reply.get('error') or reply}")
+                raise UserError(tr(profile["language"], "job_refused", what=what, why=reply.get("error") or reply))
         h, m = divmod(minutes, 60)
-        return (f"Scheduled: a morning brief at {h:02d}:{m:02d} on your workdays, and a reminder check every 5 "
-                f"minutes during work hours (it speaks only when a block is about to start or ended). Both run "
-                f"a small script, no model call, no token cost. Scripts: {scripts}. Turn off: /day cron off")
+        return tr(profile["language"], "scheduled", time=f"{h:02d}:{m:02d}", scripts=scripts)
 
     def unschedule(self) -> str:
         if self._cron is None:
-            raise UserError("Scheduling needs a running Hermes session: send /day cron off from a chat.")
+            raise UserError(tr(self.lang(), "need_session", action="off"))
         jobs = self._jobs()
         for job_id in jobs.values():
             self._cron({"action": "remove", "job_id": job_id})
         for name in (JOB_BRIEF, JOB_NUDGE):
             (self.home / "scripts" / f"{name}.py").unlink(missing_ok=True)
-        return f"Removed {len(jobs)} scheduled job(s)." if jobs else "Nothing was scheduled."
+        lang = self.lang()
+        return tr(lang, "unscheduled", n=len(jobs)) if jobs else tr(lang, "unscheduled_none")
 
     def schedule_status(self) -> str:
         if self._cron is None:
-            raise UserError("Scheduling needs a running Hermes session: send /day cron status from a chat.")
+            raise UserError(tr(self.lang(), "need_session", action="status"))
         jobs = self._jobs()
-        return "Scheduled: " + ", ".join(sorted(jobs)) if jobs else "Nothing scheduled. Turn on: /day cron on 07:30"
+        lang = self.lang()
+        return tr(lang, "sched_status", names=", ".join(sorted(jobs))) if jobs else tr(lang, "sched_status_none")
 
     def plan_text(self, day_text: str = "") -> str:
-        day = parse_day(day_text, self.now().date())
+        day = parse_day(day_text, self.now().date(), self.lang())
         plan, profile = self.make_plan(day, from_now=day == self.now().date())
         return brief.render(plan, profile)
 

@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .model import Task
 from .profile import merged
+from .texts import tr
 
 MIN_SAMPLES = 3
 FACTOR_RANGE = (0.7, 3.0)
@@ -70,21 +71,21 @@ def tasks(conn, status: str = "open") -> list[Task]:
     return [_task(r) for r in rows]
 
 
-def find_task(conn, ref: str) -> Task:
+def find_task(conn, ref: str, lang: str = "en") -> Task:
     """An open task by number ('3' or '#3') or by a unique piece of its name."""
     ref = ref.strip().lstrip("#")
     if ref.isdigit():
         row = conn.execute(f"SELECT {_COLS} FROM tasks WHERE id=? AND status='open'", (int(ref),)).fetchone()
         if row:
             return _task(row)
-        raise RefError(f"no open task number {ref}")
+        raise RefError(tr(lang, "ref_number", ref=ref))
     rows = conn.execute(f"SELECT {_COLS} FROM tasks WHERE status='open' AND lower(name) LIKE ?",
                         (f"%{ref.lower()}%",)).fetchall()
     if not rows:
-        raise RefError(f"no open task matches '{ref}'")
+        raise RefError(tr(lang, "ref_none", ref=ref))
     if len(rows) > 1:
         names = "; ".join(f"#{r[0]} {r[1]}" for r in rows)
-        raise RefError(f"'{ref}' matches several tasks ({names}); use the number")
+        raise RefError(tr(lang, "ref_several", ref=ref, names=names))
     return _task(rows[0])
 
 

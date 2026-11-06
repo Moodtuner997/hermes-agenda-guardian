@@ -37,6 +37,17 @@ def task(id: int, name: str = "Task", minutes: int = 30, priority: int = 2, cate
     return Task(id, name, category, minutes, priority, due)
 
 
+@pytest.fixture(autouse=True)
+def no_ambient_language(monkeypatch):
+    """The language and time zone of the machine running the tests must not change what they expect."""
+    import locale
+
+    for name in ("LC_ALL", "LC_MESSAGES", "LANGUAGE", "LANG"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(locale, "getlocale", lambda *a, **k: (None, None))
+    monkeypatch.setattr(sys.modules["agenda_guardian.discover"], "_windows_ui_language", lambda: "")
+
+
 @pytest.fixture
 def profile():
     return prof.new_profile()

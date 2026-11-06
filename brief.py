@@ -8,6 +8,7 @@ from .model import Plan
 
 T = {
     "en": {
+        "colon": ":",
         "title": "Plan for {day}",
         "summary": "{n} task(s) planned, {planned} of {free} free",
         "bar": "Day bar, 1 char = 30 min:  # task  = meeting  ~ protected  . free",
@@ -27,13 +28,14 @@ T = {
                      "(/day done {id} <minutes>): that is how the plan learns your pace.",
     },
     "fr": {
+        "colon": " :",
         "title": "Plan du {day}",
         "summary": "{n} tâche(s) planifiée(s), {planned} sur {free} de libre",
         "bar": "Barre du jour, 1 car. = 30 min :  # tâche  = réunion  ~ protégé  . libre",
         "why": "pourquoi",
         "not_today": "Pas aujourd'hui",
         "rules": "Règles appliquées",
-        "nothing": "Rien de planifié : ajoutez des tâches avec /day add \"nom\" 45m",
+        "nothing": "Rien de planifié : ajoute des tâches avec /day add \"nom\" 45m",
         "off": "Jour non travaillé. Rien de planifié.",
         "part": "partie {i}/{n}",
         "focus": "concentration",
@@ -108,12 +110,12 @@ def render(plan: Plan, profile: dict) -> str:
             out.append(t["nothing"])
     if plan.dropped:
         out.append("")
-        out.append(t["not_today"] + ":")
+        out.append(t["not_today"] + t["colon"])
         for item in plan.dropped:
             out.append(f"- #{item.task.id} {item.task.name}: {item.detail}")
     if plan.rules:
         out.append("")
-        out.append(t["rules"] + ":")
+        out.append(t["rules"] + t["colon"])
         out += [f"- {rule}" for rule in plan.rules]
     return "\n".join(out)
 

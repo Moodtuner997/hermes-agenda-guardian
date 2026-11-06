@@ -21,7 +21,7 @@ ni un agenda particulier.
 - Un seul chemin d'écriture : tout ce qui s'écrit passe par une proposition (`day_propose`, `day_week_plan` ou
   `day_stage`, un plan composé par l'agent) puis `day_confirm`. La consigne système interdit tout autre outil
   d'agenda ; le plugin ne peut pas le bloquer (voir Pièges).
-- Chaque modification passe `python -m pytest tests -q` (103 tests), `hermes plugins validate .`, puis, si le cron,
+- Chaque modification passe `python -m pytest tests -q` (107 tests), `hermes plugins validate .`, puis, si le cron,
   le tableau de bord, un outil ou le hook bougent, `tests/e2e_hermes.py` avec l'interpréteur de Hermes (dans un
   `HERMES_HOME` jetable : un dossier avec `config.yaml` qui active le plugin et une copie du plugin).
 - README, PR et textes publics en anglais ; commits en français, format conventionnel.
@@ -57,6 +57,20 @@ ni un agenda particulier.
   commandes du dispatcher (un test vérifie que chacune y est, à tenir à jour) ; `day_week_plan` place plusieurs
   activités d'un coup (`proposer.fill_days` pour « N par jour ») ; `day_stage` enregistre les blocs que l'agent
   compose ; une habitude absente depuis 3 semaines est jugée finie (`DayStat.over`).
-- Non prouvé : la 0.4.0 sur Telegram (hook de réécriture sur une vraie passerelle, agent qui appelle
-  `day_week_plan` au lieu d'écrire à la main), question de durée envoyée par le cron, livraison
+- Vu en vrai (Telegram, A1, 2026-11-06, 0.3.0 puis 0.4.0, journaux et base de sessions de Hermes lus) : (1) l'historique
+  écartait un jour libre cette semaine (« d'habitude pris, 5 des 8 dernières semaines ») : `propose` ne rendait presque
+  rien, l'agent a refait le plan à la main (`gapi` par le terminal) ; (2) Théo a copié les formats de l'aide
+  (`work_hours=09:00-19:00 protected=dejeuner@13H30-15h`, `real=90`) et a reçu l'aide complète (1717 caractères) au
+  moins quatre fois ; (3) `day_kind` exigeait une plage horaire : l'agent a interrogé Théo ; (4) un `/day write`
+  tapé pendant que l'agent répondait est arrivé à l'agent comme du texte (Hermes met la suite en file) ; (5) le crochet
+  n'avait réécrit aucune phrase depuis la 0.4 (Théo n'avait tapé que des commandes). D'où 0.5.0 : l'historique ordonne
+  les jours sans jamais écarter un jour libre (`Session.spare`, `rej_usual` ne sert plus que pour les jours non
+  retenus), plage absente = heures de travail dites dans la réponse (`_default_window`), plus de séances que de jours
+  = « N par jour », `day_took` sans séance retrouve la dernière question, `/day` + tout sauf `commands.DIRECT` va à
+  l'agent, aide de 5 lignes sans format (`/day help all` pour la liste), consigne système réécrite (parler sans
+  syntaxe, proposer un chiffre manquant et le dire, déplacer = `day_undo` puis replanifier).
+- Les textes que l'agent relaie ne portent plus de syntaxe (`/day ok N`, `real=2h`, `/day kind ...`) : un test
+  vérifie l'aide courte ; en ajouter un si un nouveau texte affiché cite une commande.
+- Non prouvé : la 0.5.0 sur Telegram (crochet sur une vraie passerelle, agent qui appelle `day_week_plan` avec un
+  chiffre supposé au lieu de questionner ou d'écrire à la main), question de durée envoyée par le cron, livraison
   Telegram/WhatsApp, macOS.

@@ -193,6 +193,20 @@ def test_the_duration_question_comes_once_after_the_activity_ends(world):
     assert g.kind_questions(end + timedelta(minutes=20)) == []
 
 
+def test_a_bare_duration_answers_the_question_just_asked(world):
+    g, cal = world
+    g.set_write(True)
+    g.confirm(g.propose("sport", 1)["proposal_id"])
+    end = datetime.fromisoformat(g.conn.execute("SELECT end FROM written WHERE part='main'").fetchone()[0])
+    with pytest.raises(UserError, match="Aucune séance terminée"):
+        g.took("", 90)  # nothing has ended yet: there is nothing to attach it to
+    g._now = lambda: end + timedelta(minutes=10)
+    assert g.kind_questions(end + timedelta(minutes=10))
+    assert "réel 90 min" in g.took("", 90)["text"]
+    with pytest.raises(UserError, match="Aucune séance terminée"):
+        g.took("", 90)  # answered already: a second bare duration has no session left
+
+
 def test_took_rejects_an_unknown_session(world):
     g, _ = world
     with pytest.raises(UserError, match="Aucune activité terminée"):

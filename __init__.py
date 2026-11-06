@@ -4,8 +4,8 @@ Plans from the durations you estimate, corrected by the durations you actually t
 of any calendar source, inside rules you wrote down yourself. It also fits activities (sport, a long call) into
 the week with reasons drawn from the calendar's history, and writes to a Google calendar only when the user
 typed ``/day write on`` and said yes, removing only what it wrote. It never calls a model: ``/day`` (slash),
-``hermes guardian`` (CLI) and fifteen tools for the agent share one core. ``/day`` followed by a sentence is
-a request in plain words: it goes to the agent, not to the command parser.
+``hermes guardian`` (CLI) and fifteen tools for the agent share one core. ``/day`` followed by anything but a
+format-free command (write, undo, plan...) is a request in plain words: it goes to the agent, not to the parser.
 """
 
 from __future__ import annotations
@@ -206,7 +206,7 @@ def _t_undo(g: Guardian, a: dict) -> dict:
 def _t_took(g: Guardian, a: dict) -> dict:
     if a.get("actual_minutes") is None:
         raise UserError("actual_minutes is required: ask the user how long it really took.")
-    return g.took(str(a.get("session", "")), int(a["actual_minutes"]))
+    return g.took(str(a.get("session") or ""), int(a["actual_minutes"]))
 
 
 def _t_week(g: Guardian, a: dict) -> dict:
@@ -249,11 +249,12 @@ _TOOLS = [
         ["task"])),
     ("day_tasks", _t_tasks, _schema("day_tasks", "List the open tasks with their estimates.", {})),
     ("day_kind", _t_kind, _schema(
-        "day_kind", "The activity sheet: what one kind of activity (sport, a call block, shopping...) really takes. "
-        "ASK the user for each number, never guess: real_minutes (the activity itself, at their honest pace), "
-        "before_minutes (getting ready), after_minutes (shower, travel, winding down), window (HH:MM-HH:MM in which "
-        "everything must fit) and days (preferred weekdays, e.g. 'mon,thu'). action: set (default when real_minutes "
-        "is given), list, remove.",
+        "day_kind", "The activity sheet: what one kind of activity (sport, a dog walk, shopping...) really takes. "
+        "Only real_minutes is needed (the activity itself, at the user's honest pace: if they said a duration, use "
+        "it). Optional: before_minutes (getting ready), after_minutes (shower, travel, winding down), window "
+        "(HH:MM-HH:MM in which everything must fit; without one the user's work hours are used and the answer says "
+        "so) and days (preferred weekdays, e.g. 'mon,thu'). action: set (default when real_minutes is given), list, "
+        "remove.",
         {"action": {**_S, "enum": ["set", "list", "remove"]}, "name": _S, "real_minutes": {"type": "integer"},
          "before_minutes": {"type": "integer"}, "after_minutes": {"type": "integer"}, "window": _S, "days": _S})),
     ("day_habit", _t_habit, _schema(
@@ -262,11 +263,12 @@ _TOOLS = [
         {"action": {**_S, "enum": ["add", "list", "remove"]}, "day": _S, "hours": _S, "label": _S,
          "id": {"type": "integer"}})),
     ("day_propose", _t_propose, _schema(
-        "day_propose", "Where could this activity go in the user's week? Reads the Google calendar and its last "
-        "eight weeks, returns concrete slots WITH THE REASONS (free time, what the history says about each day, "
-        "how heavy the day usually is), the days left out and why, and the questions to ask the user. Writes "
-        "NOTHING. Show the reasons to the user, ask the questions (especially what is planned but not in the "
-        "calendar), and wait for a clear yes.",
+        "day_propose", "Where could this ONE saved activity go in the user's week? (Several activities, or numbers "
+        "not saved yet: day_week_plan.) Reads the Google calendar and its last eight weeks, returns concrete slots "
+        "WITH THE REASONS (free time, what the history says about each day, how heavy the day usually is), the "
+        "days left out and why, and the questions to ask the user. History orders the days, it never rules out a day "
+        "the calendar leaves free. Writes NOTHING. Show the reasons, ask the questions (especially what is planned "
+        "but not in the calendar), and wait for a clear yes.",
         {"activity": {**_S, "description": "the activity sheet name"}, "count": {"type": "integer"},
          "days": {**_S, "description": "force these weekdays, e.g. 'tue' (the user's explicit wish)"},
          "from_day": {**_S, "description": "today (default), tomorrow, +N, fri, YYYY-MM-DD"},
@@ -275,8 +277,9 @@ _TOOLS = [
     ("day_week_plan", _t_week_plan, _schema(
         "day_week_plan", "Place several activities in the user's week in ONE call (sport, client calls, a course...): "
         "each around the calendar events and around the ones placed before it, with its reasons. Pass the numbers the "
-        "user gave you, nothing has to be saved first; ask only for what is missing, never guess a number. Writes "
-        "NOTHING: tell the plan in plain words, ask the questions listed, wait for a clear yes, then day_confirm.",
+        "user gave you, nothing has to be saved first; for a missing number assume a sensible one and say so in your "
+        "answer (their yes or correction settles it). More sessions than days means 'so many a day'. Writes NOTHING: "
+        "tell the plan in plain words, ask the questions listed, wait for a clear yes, then day_confirm.",
         {"activities": {"type": "array", "minItems": 1, "maxItems": 6, "description": "most important first: each "
                         "one is placed around the previous ones", "items": {
                             "type": "object", "additionalProperties": False, "required": ["name"], "properties": {
@@ -285,7 +288,8 @@ _TOOLS = [
                                 "sessions": {"type": "integer", "description": "how many in the range (default 1)"},
                                 "per_day": {"type": "integer", "description": "instead of sessions: this many every "
                                             "allowed day (2 blocks of 2h of a course each day)"},
-                                "window": {**_S, "description": "HH:MM-HH:MM in which the whole thing must fit"},
+                                "window": {**_S, "description": "HH:MM-HH:MM in which the whole thing must fit; omit it "
+                                           "and the user's work hours are used (the answer says so)"},
                                 "days": {**_S, "description": "weekdays the user asked for, e.g. 'tue,thu'"},
                                 "before_minutes": {"type": "integer"}, "after_minutes": {"type": "integer"},
                                 "remember": {"type": "boolean", "description": "keep these numbers as the activity's "
@@ -308,7 +312,7 @@ _TOOLS = [
         "day_confirm", "Write a proposal (day_propose, day_week_plan or day_stage) to the user's Google calendar. Call "
         "it ONLY after the user has clearly said yes to this exact proposal in this conversation; never on your own "
         "initiative. It refuses unless the user themselves turned writing on (/day write on). It never touches an "
-        "existing event: it only adds events marked as created by this plugin, so /day undo can take them back. "
+        "existing event: it only adds events marked as created by this plugin, so day_undo can take them back. "
         "Never write to the calendar with another tool.",
         {"proposal_id": {"type": "integer"}, "days": {**_S, "description": "only these weekdays of the proposal"}},
         ["proposal_id"])),
@@ -317,10 +321,11 @@ _TOOLS = [
         "only remove events this plugin created and still recognises; it never removes anything else.",
         {"which": _S})),
     ("day_took", _t_took, _schema(
-        "day_took", "Record how long a finished activity REALLY took (the activity itself). Ask the user; the next "
-        "proposal is corrected by their own pace.",
-        {"session": {**_S, "description": "session number from the question, or the activity name"},
-         "actual_minutes": {"type": "integer"}}, ["session", "actual_minutes"])),
+        "day_took", "Record how long a finished activity REALLY took (the activity itself). A bare duration from "
+        "the user answers the last question asked: leave session out and it finds that activity. The next proposal "
+        "is corrected by their own pace.",
+        {"session": {**_S, "description": "optional: session number from the question, or the activity name"},
+         "actual_minutes": {"type": "integer"}}, ["actual_minutes"])),
     ("day_week", _t_week, _schema(
         "day_week", "The user's week as the plugin sees it: calendar events, what it wrote, what is proposed and "
         "waiting for a yes. Read-only.", {"week_of": {**_S, "description": "any day of the week; default this week"}})),
@@ -334,42 +339,47 @@ _TOOLS = [
 
 RULES = {
     "en": (
-        "agenda-guardian manages the user's agenda. When they talk about fitting activities into their week, "
-        "or about their agenda (also when a message starts with /day followed by a sentence):\n"
-        "1. If they give the numbers (how long, how many, when), call day_week_plan with ALL the activities at "
-        "once. Ask only for what is missing and never guess a number. For one activity with a saved sheet, "
-        "day_propose is enough (day_kind saves a sheet).\n"
-        "2. Tell the plan in plain words WITH ITS REASONS (taken from their calendar history), the days left out "
-        "and why, and ask what is planned that is not in the calendar.\n"
-        "3. If they tell you things the planner cannot express (a fixed appointment, an evening spent elsewhere), "
-        "build those blocks yourself and register them with day_stage.\n"
-        "4. Call day_confirm only after the user clearly said yes to that proposal in this conversation. If "
-        "writing is off, tell them to type /day write on themselves; if they would rather not, give the plan as "
-        "text and write nothing. NEVER create, move or delete calendar events with any other tool (the Google "
-        "Workspace skill, the terminal): they would not be marked, and /day undo could not take them back.\n"
-        "5. Never modify or delete an event the user created (priorities, medical appointments, unforeseen "
-        "things). Only day_undo removes anything, and only what this plugin wrote.\n"
-        "6. After an activity ends, ask how long it really took and record it with day_took.\n"
-        "Speak like a person: do not show command syntax unless asked."),
+        "agenda-guardian manages the user's agenda. Talk in plain words: never show command syntax, key=value or "
+        "formats, and accept loose answers (\"9h30\", \"the evening\", \"1h30\").\n"
+        "1. To fit activities into their week (also for a message that starts with /day and a sentence): call "
+        "day_week_plan with ALL the activities at once. If a number is missing, pick a sensible one yourself and say "
+        "it as an assumption (\"I took 2 h, tell me if not\"): their yes or correction settles it. Do not question "
+        "them first, and do not save (remember) a number they did not say.\n"
+        "2. Tell the plan in plain words WITH ITS REASONS, the days left out and why, and ask what is planned that "
+        "is not in the calendar.\n"
+        "3. Things the planner cannot express (a fixed appointment, an evening spent elsewhere): compose those "
+        "blocks and register them with day_stage. To move something already written: day_undo, then plan again.\n"
+        "4. day_confirm only after a clear yes to that exact proposal. If writing is off, tell them to type "
+        "/day write on themselves (a \"/day write\" that reaches you as plain text did nothing); if they prefer "
+        "not, give the plan as text. NEVER create, move or delete events with any other tool (Google Workspace "
+        "skill, terminal): they would not be marked and undo could not take them back.\n"
+        "5. Never modify or delete an event the user created. Only day_undo removes anything, and only what this "
+        "plugin wrote.\n"
+        "6. A bare duration (\"1h30\") answers the last question asked: record it with day_took (it finds the "
+        "activity just asked about); an activity never seen: day_kind with its length, no time window needed."),
     "fr": (
-        "agenda-guardian gère l'agenda de l'utilisateur. Quand il parle de caser des activités dans sa semaine "
-        "ou de son agenda (aussi quand un message commence par /day suivi d'une phrase) :\n"
-        "1. S'il donne les chiffres (combien de temps, combien de fois, quand), appelle day_week_plan avec "
-        "TOUTES les activités d'un coup. Demande seulement ce qui manque et ne devine jamais un chiffre. Pour "
-        "une seule activité qui a une fiche, day_propose suffit (day_kind enregistre une fiche).\n"
-        "2. Dis le plan en mots simples AVEC SES RAISONS (tirées de l'historique de son agenda), les jours "
-        "écartés et pourquoi, et demande ce qui est prévu hors agenda.\n"
-        "3. S'il te dit des choses que le planificateur ne sait pas exprimer (un rendez-vous fixe, une soirée "
-        "passée ailleurs), compose ces blocs toi-même et enregistre-les avec day_stage.\n"
-        "4. N'appelle day_confirm qu'après un oui clair à cette proposition dans cette conversation. Si "
-        "l'écriture est désactivée, dis-lui de taper /day write on lui-même ; s'il préfère ne pas, donne le plan "
-        "en texte et n'écris rien. Ne crée, ne déplace et ne supprime JAMAIS d'événement avec un autre outil "
-        "(skill Google Workspace, terminal) : il ne serait pas marqué et /day undo ne pourrait pas le retirer.\n"
-        "5. Ne modifie ni ne supprime jamais un événement créé par l'utilisateur (priorités, rendez-vous "
-        "médicaux, imprévus). Seul day_undo retire quelque chose, et seulement ce que ce plugin a écrit.\n"
-        "6. Quand une activité est finie, demande combien de temps elle a vraiment pris et note-le avec "
-        "day_took.\n"
-        "Parle comme une personne : ne montre pas la syntaxe des commandes sauf si on te la demande."),
+        "agenda-guardian gère l'agenda de l'utilisateur. Parle en mots simples : ne montre jamais de syntaxe de "
+        "commande, de clé=valeur ni de format, et accepte les réponses vagues (« 9h30 », « le soir », « 1h30 »).\n"
+        "1. Pour caser des activités dans sa semaine (aussi pour un message qui commence par /day suivi d'une "
+        "phrase) : appelle day_week_plan avec TOUTES les activités d'un coup. S'il manque un chiffre, choisis-en un "
+        "raisonnable toi-même et dis-le comme une hypothèse (« j'ai pris 2 h, dis-moi si c'est autre chose ») : son "
+        "oui ou sa correction tranche. Ne l'interroge pas d'abord et ne retiens (remember) aucun chiffre qu'il n'a "
+        "pas dit.\n"
+        "2. Dis le plan en mots simples AVEC SES RAISONS, les jours écartés et pourquoi, et demande ce qui est "
+        "prévu hors agenda.\n"
+        "3. Ce que le planificateur ne sait pas exprimer (un rendez-vous fixe, une soirée passée ailleurs) : "
+        "compose ces blocs et enregistre-les avec day_stage. Pour déplacer ce qui est déjà écrit : day_undo, puis "
+        "replanifie.\n"
+        "4. day_confirm seulement après un oui clair à cette proposition précise. Si l'écriture est désactivée, "
+        "dis-lui de taper /day write on lui-même (un « /day write » qui t'arrive comme du texte n'a rien fait) ; "
+        "s'il préfère ne pas, donne le plan en texte. Ne crée, ne déplace et ne supprime JAMAIS d'événement avec un "
+        "autre outil (skill Google Workspace, terminal) : il ne serait pas marqué et « annule » ne pourrait pas le "
+        "retirer.\n"
+        "5. Ne modifie ni ne supprime jamais un événement créé par l'utilisateur. Seul day_undo retire quelque "
+        "chose, et seulement ce que ce plugin a écrit.\n"
+        "6. Une durée seule (« 1h30 ») répond à la dernière question posée : note-la avec day_took (il retrouve "
+        "l'activité dont on vient de parler) ; une activité inconnue : day_kind avec sa durée, sans plage "
+        "horaire."),
 }
 
 
@@ -384,7 +394,7 @@ def register(ctx: Any) -> None:
     global _CTX
     _CTX = ctx
     ctx.register_command("day", _slash, description="Plan your day from your rules, estimates and calendar",
-                         args_hint="<what you want in plain words> | setup | set | add | plan | now | done | brief")
+                         args_hint="<tell me what you want, in your own words> | write on|off | undo")
     ctx.register_cli_command("guardian", "Plan your day from your rules, estimates and calendar", _cli_setup, _cli_run)
     for name, fn, schema in _TOOLS:
         ctx.register_tool(name=name, toolset="agenda-guardian", schema=schema, handler=_tool(fn),

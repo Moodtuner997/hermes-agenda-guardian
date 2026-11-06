@@ -17,8 +17,11 @@ who plans more than the day allows.
   `/day write on` yourself; then it only adds events it marks as its own, only after you say yes to a proposal
   that shows its reasons, and it can only remove those events (never one you created).
 - Works from the `/day` slash command, `hermes guardian` on the command line (not `hermes day`: the day-panel plugin already uses that name), fifteen agent tools (so the onboarding and the planning can
-  happen in a chat, including from a phone) and a **Today / Week** tab in the dashboard. `/day` followed by a
-  sentence ("fit three sport sessions in my week") is not a command: it goes to the agent as an ordinary message.
+  happen in a chat, including from a phone) and a **Today / Week** tab in the dashboard.
+- **You talk to it in plain words, there is no syntax to learn.** "Put three sport sessions, two client calls and
+  two hours of course a day in my week", "the walk took me 1h30". `/day` followed by anything but one of the
+  format-free commands (`write`, `undo`, `plan`...) goes to the agent as an ordinary message; typing `/day` alone
+  prints six lines.
 
 ## Quick start
 
@@ -27,7 +30,8 @@ hermes plugins install Moodtuner997/hermes-agenda-guardian
 hermes plugins enable agenda-guardian
 ```
 
-Then, in a chat:
+Then, in a chat, just say what you want ("my work hours are 9 to 7, lunch between 1 and 3"). If you prefer typing
+commands, every one of them can also be said in words:
 
 ```
 /day setup                                   what your Hermes profile already has, then the few questions
@@ -103,8 +107,9 @@ could go; the plugin answers with reasons taken from your own calendar, and writ
 ```
 
 With an agent you say it in your own words ("fit two sport sessions in my week"); the plugin adds a short section
-to the system prompt that tells the agent to ask for each number, show the reasons, ask what is planned outside the
-calendar, and write only after a clear yes. The same proposal on an invented calendar (eight weeks of history,
+to the system prompt that tells the agent to talk in plain words, to assume a sensible figure when one is missing
+and say so (your yes or correction settles it), to show the reasons, ask what is planned outside the calendar, and
+write only after a clear yes. The same proposal on an invented calendar (eight weeks of history,
 a dinner most Tuesdays, a family dinner the plugin was told about on Wednesdays):
 
 ```
@@ -121,12 +126,12 @@ In short: Monday and Thursday, slots your calendar and its history show as free.
      - Spread out: 3 day(s) from the nearest other session.
 ...
 Days I left out, and why
-  - Tuesday: usually taken, 5 of the last 8 weeks had something between 18:00 and 22:00 (for example 'Dinner with Sam').
+  - Tuesday: usually taken, 5 of the last 8 weeks had something between 18:00 and 22:00 (for example 'Dinner with Sam'). It is free this week though: say so if you want this day.
   - Wednesday: you told me 'family dinner' (18:00-21:00).
 
 Before you validate
   - Is anything planned on Monday and Thursday at those times that is not in your calendar?
-  - Do you want me to write this to your calendar? (nothing is written until you say yes: /day ok 1)
+  - Do you want me to write this to your calendar? (nothing is written until you say yes)
 ```
 
 ### A whole week in one request
@@ -145,10 +150,12 @@ prompt tells the agent never to create, move or delete calendar events with anot
 
 What it will and will not do:
 
-- **Reasons from your history.** It reads the next days and the eight weeks before. A window taken in at least
-  half of the recorded weeks counts as a habit and the day is left out, with the title it found as proof, unless
-  it has not happened in the last three weeks: then the habit is treated as over, the day is kept, and the reason
-  says so. A short history (under three weeks with events) is said, not hidden. Days are spread out; consecutive
+- **Reasons from your history.** It reads the next days and the eight weeks before. History orders the days and
+  explains them, it never overrules your calendar: a window taken in at least half of the recorded weeks counts as
+  a habit, so that day comes last and is left out when other days will do (with the title it found as proof and
+  "it is free this week though"); it is used, with a note asking whether something is planned that is not in the
+  calendar, when it is needed. A habit that has not happened in the last three weeks is treated as over, the day
+  is kept, and the reason says so. A short history (under three weeks with events) is said, not hidden. Days are spread out; consecutive
   days are used only when nothing better exists, and it says so.
 - **What the calendar cannot show.** `/day habit` records what you do outside the calendar; every proposal asks
   about the evenings it picked.
@@ -240,9 +247,10 @@ refuses unless you turned writing on yourself, and no tool can turn it on.
 - **Dashboard:** `GET /plan`, `GET /week`, `POST /tasks`, `POST /tasks/<id>/done`, `POST /proposals/<id>/ok`,
   `POST /proposals/<id>/refuse`, `POST /groups/<id>/undo` under `/api/plugins/agenda-guardian/`, behind the
   dashboard's own authentication. Writing from the dashboard needs the same `/day write on` switch.
-- **System prompt:** one short section (rules for the agent, about 1,600 characters, in your language).
+- **System prompt:** one short section (rules for the agent, about 1,700 characters, in your language).
 - **Hook:** one, `pre_gateway_dispatch`. It looks at the text of each incoming chat message and acts on one
-  case only: a message that starts with `/day` followed by a sentence (not a command). That message is rewritten
+  case only: a message that starts with `/day` followed by anything other than a format-free command (`help`,
+  `plan`, `now`, `list`, `brief`, `ok`, `undo`, `write`, `cron`). That message is rewritten
   into an ordinary request for the agent, prefixed with a pointer to the plugin's tools. It reads nothing else,
   stores nothing and never drops a message; on any error it does nothing.
 - **Approvals:** the plugin touches no tool call. `day_schedule on` goes through the registry's `cronjob_manage`
@@ -275,12 +283,15 @@ refuses unless you turned writing on yourself, and no tool can turn it on.
   calendar. Its system prompt tells the agent not to, and every plan has a road in (`day_week_plan`,
   `day_stage`) so the agent has no reason to go around. Events written by another tool carry no marker, so
   `/day undo` cannot see them: that was seen once in real use, and is why `day_stage` exists.
+- A `/day ...` typed while the agent is still answering is queued by Hermes and reaches the agent as plain text,
+  not the plugin (seen once: the agent answered that `/day write` did not exist and wrote the events itself). Type
+  `/day write on` when the chat is idle; the system prompt tells the agent it cannot do it for you.
 - One calendar, one person. Not a team scheduler.
 
 ## Development
 
 ```
-python -m pytest tests -q                  # 103 tests, no Hermes needed
+python -m pytest tests -q                  # 107 tests, no Hermes needed
 hermes plugins validate .
 HERMES_HOME=<home> <hermes python> tests/e2e_hermes.py     # real tool calls, real cron, no model
 python tests/make_demo_profile.py --home <home>             # an invented day for screenshots

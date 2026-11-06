@@ -34,13 +34,20 @@ class AgendaMixin:
                  days: str = "") -> dict:
         lang = self.lang()
         existing = store.get_kind(self.conn, name)
+        defaulted = not window and not existing
         if not window:
-            if not existing:
-                raise UserError(tr(lang, "kind_window_needed"))
-            window = "-".join(existing.win)
+            window = "-".join(existing.win) if existing else self._default_window(real_min + before_min + after_min)
         kind = kindmod.build(name, real_min, before_min, after_min, window, days, lang)
         store.save_kind(self.conn, kind, self.now())
-        return {"ok": True, "kind": self._kind_dict(kind), "text": tr(lang, "kind_saved", line=self._kind_line(kind))}
+        text = tr(lang, "kind_saved", line=self._kind_line(kind))
+        if defaulted:
+            text += " " + tr(lang, "window_default", name=kind.name, start=kind.win[0], end=kind.win[1])
+        return {"ok": True, "kind": self._kind_dict(kind), "window_default": defaulted, "text": text}
+
+    def _default_window(self, total_minutes: int) -> str:
+        """No window given: the user's work hours, or the waking day when the activity does not fit in them."""
+        start, end = self.profile()["work_hours"]
+        return f"{start}-{end}" if prof.minutes_of(end) - prof.minutes_of(start) >= total_minutes else "07:00-22:00"
 
     def kind_remove(self, name: str) -> dict:
         lang = self.lang()
@@ -200,8 +207,6 @@ class AgendaMixin:
         if real is None:
             raise UserError(tr(lang, "week_minutes", name=name))
         window = first(spec.get("window"), saved and "-".join(saved.win))
-        if not window:
-            raise UserError(tr(lang, "kind_window_needed"))
         try:
             minutes = int(real)
             before = int(first(spec.get("before_minutes"), saved and saved.before_min, 0))
@@ -209,16 +214,19 @@ class AgendaMixin:
             per_day, count = int(spec.get("per_day") or 0), int(spec.get("sessions") or 1)
         except (TypeError, ValueError):
             raise UserError(tr(lang, "week_number", name=name))
-        for key, value, low, high in (("per_day", per_day, 0, 4), ("sessions", count, 1, 7)):
+        for key, value, low, high in (("per_day", per_day, 0, 4), ("sessions", count, 1, 28)):
             if not low <= value <= high:
                 raise UserError(tr(lang, "week_range", name=name, key=key, low=low, high=high))
+        defaulted = not window
+        if defaulted:
+            window = self._default_window(minutes + before + after)
         days = str(first(spec.get("days"), saved and ",".join(map(str, saved.days))) or "")
         kind = kindmod.build(name, minutes, before, after, str(window), days, lang)
         try:  # the days said just now are a wish; a saved sheet's days are only a preference
             force = tuple(prof._weekdays(str(spec["days"]), lang)) if spec.get("days") else ()
         except ValueError as exc:
             raise UserError(str(exc))
-        return kind, per_day, count, force, bool(spec.get("remember"))
+        return kind, per_day, count, force, bool(spec.get("remember")), defaulted
 
     def week_plan(self, activities: list, first: date | None = None, last: date | None = None) -> dict:
         """Several activities placed in one go, each around the events and around the ones placed before it.
@@ -238,7 +246,17 @@ class AgendaMixin:
         habit_rows = store.habits(self.conn)
         taken: list[tuple[datetime, datetime]] = []
         sessions, rejected, summary = [], [], []
-        for kind, per_day, count, force, remember in wanted:
+        span = [first + timedelta(days=i) for i in range((last - first).days + 1)]
+        for kind, per_day, count, force, remember, defaulted in wanted:
+            if defaulted:
+                warnings.append(tr(lang, "window_default", name=kind.name, start=kind.win[0], end=kind.win[1]))
+            if not per_day and count > 1:  # more sessions than days is "so many a day", not an error
+                allowed = force or kind.days
+                room = sum(1 for d in span if not allowed or d.isoweekday() in allowed) or 1
+                if count > room:
+                    per_day = -(-count // room)
+                    if per_day > 4:
+                        raise UserError(tr(lang, "week_range", name=kind.name, key="sessions", low=1, high=4 * room))
             factor = store.factors(self.conn).get(kindmod.category(kind.name), (1.0, 0))
             stats = history.analyse(past, now.date(), kind.win)
             place = proposer.fill_days if per_day else proposer.propose
@@ -253,7 +271,7 @@ class AgendaMixin:
                             "wanted": part["wanted"] if per_day else count, "placed": len(part["sessions"]),
                             "missing": part["missing"], "window": "-".join(kind.win), "minutes": part["minutes"],
                             "pause_minutes": profile["break_min"]})
-            if remember:
+            if remember and not defaulted:  # a window nobody gave is not kept as if they had
                 store.save_kind(self.conn, kind, now)
         sessions.sort(key=lambda s: s["block_start"])
         result = {"sessions": sessions, "rejected": rejected, "activities": summary, "warnings": warnings,
@@ -480,14 +498,19 @@ class AgendaMixin:
     # --- how long did it really take ------------------------------------------------------------------------
     def took(self, ref: str, minutes: int) -> dict:
         lang, now = self.lang(), self.now()
-        ref = ref.strip().lstrip("#").lower()
+        ref = (ref or "").strip().lstrip("#").lower()
         mains = [r for r in store.written(self.conn, live_only=False) if r["part"] == "main"]
-        if ref.isdigit():
+        if not ref:  # a bare duration answers the question just asked, else the last activity that ended
+            ended = [r for r in mains if datetime.fromisoformat(r["end"]) <= now
+                     and not store.was_notified(self.conn, f"logged:{r['group_id']}")]
+            asked = [r for r in ended if store.was_notified(self.conn, f"asked:{r['group_id']}")]
+            row = (asked or ended or [None])[-1]
+        elif ref.isdigit():
             row = next((r for r in mains if r["group_id"] == int(ref)), None)
         else:
             row = next((r for r in reversed(mains) if r["kind"] == ref and datetime.fromisoformat(r["end"]) <= now), None)
         if row is None:
-            raise UserError(tr(lang, "took_unknown", ref=ref))
+            raise UserError(tr(lang, "took_unknown", ref=ref) if ref else tr(lang, "took_none"))
         if not 1 <= minutes <= 960:
             raise UserError(tr(lang, "done_range"))
         planned = int((datetime.fromisoformat(row["end"]) - datetime.fromisoformat(row["start"])).total_seconds() // 60)

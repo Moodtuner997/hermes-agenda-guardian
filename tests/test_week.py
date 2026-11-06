@@ -83,17 +83,28 @@ def test_a_saved_sheet_fills_the_numbers_the_request_leaves_out(world):
     assert session["end"].endswith("20:15:00") and session["block_end"].endswith("20:45:00")
 
 
-def test_the_numbers_are_never_guessed(world):
+def test_the_plugin_never_invents_a_length_but_a_missing_window_is_assumed_and_said(world):
     g, cal = world
-    with pytest.raises(UserError, match="Combien de temps"):
+    with pytest.raises(UserError, match="Pas de durée"):  # the agent picks one and says so; the plugin does not
         g.week_plan([{"name": "yoga", "window": "18:00-20:00"}])
-    with pytest.raises(UserError, match="Quand est-ce possible"):
-        g.week_plan([{"name": "yoga", "minutes": 60}])
     with pytest.raises(UserError, match="Donne entre 1 et 6"):
         g.week_plan([])
     with pytest.raises(UserError, match="per_day"):
         g.week_plan([{"name": "yoga", "minutes": 60, "window": "18:00-20:00", "per_day": 9}])
     assert not cal.calls  # every request is checked before the calendar is read
+    plan = g.week_plan([{"name": "yoga", "minutes": 60, "remember": True}])
+    assert plan["sessions"] and any("pas de plage horaire" in w and "09:00-18:00" in w for w in plan["warnings"])
+    assert "pas de plage horaire" in plan["text"]
+    assert g.kinds_view()["kinds"] == []  # a window nobody gave is not kept as if they had
+
+
+def test_more_sessions_than_days_means_so_many_a_day(world):
+    g, _ = world
+    plan = g.week_plan([{"name": "yoga", "minutes": 60, "window": "18:00-22:00", "days": "mar,mer", "sessions": 6}])
+    assert plan["activities"][0]["mode"] == "daily" and plan["activities"][0]["per_day"] == 3
+    assert [s["day"] for s in plan["sessions"]].count("2026-11-10") == 3 and len(plan["sessions"]) == 6
+    with pytest.raises(UserError, match="sessions"):
+        g.week_plan([{"name": "yoga", "minutes": 60, "window": "18:00-22:00", "days": "mar,mer", "sessions": 12}])
 
 
 def test_remember_keeps_the_numbers_as_a_sheet(world):
@@ -109,13 +120,28 @@ def test_a_habit_that_stopped_is_kept_and_said(world):
     cal.weekly("Bloc du vendredi", 5, "18:30", "21:00", FIRST_HISTORY_MONDAY, 8, skip=(5, 6, 7))  # over for 3 weeks
     cal.weekly("Dîner Léa", 2, "19:30", "22:00", FIRST_HISTORY_MONDAY, 8, skip=(1, 4, 6))  # still happening
     g.kind_set("yoga", 60, 0, 0, "18:00-22:00", "mar,ven")
-    result = g.propose("yoga", 2)
+    result = g.propose("yoga", 1)
     days = {s["day"]: s for s in result["sessions"]}
-    assert "2026-11-13" in days  # Friday: the old block no longer counts
+    assert list(days) == ["2026-11-13"]  # Friday: the old block no longer counts
     reasons = " ".join(days["2026-11-13"]["reasons"])
     assert "plus depuis 3 semaines" in reasons and "Bloc du vendredi" in reasons and "finie" in reasons
-    assert "2026-11-10" not in days  # Tuesday: the dinner is still there, still left out
+    # Tuesday: the dinner is still a habit, so it comes last; free this week, it is said, not hidden
     assert "Dîner Léa" in " ".join(r["reason"] for r in result["rejected"])
+
+
+def test_history_orders_the_days_it_never_rules_out_a_free_one(world):
+    g, _ = world  # Monday and Thursday were taken 8 weeks out of 8, this week's calendar leaves them free
+    g.kind_set("sport", 120, 0, 0, "13:00-18:00", "")
+    plan = g.propose("sport", 6)  # five other days exist: the sixth session needs one of the usually-taken ones
+    chosen = [s["day"] for s in plan["sessions"]]
+    assert len(chosen) == 6 and "2026-11-09" in chosen
+    usual = next(s for s in plan["sessions"] if s["day"] == "2026-11-09")
+    assert "libre cette semaine" in " ".join(usual["reasons"])
+    assert "dernier choix" in " ".join(usual["reasons"]) and "n'y figure pas" in " ".join(usual["notes"])
+    fewer = g.propose("sport", 2)  # two are enough: the usually-taken days are kept in reserve, and said
+    assert not {"2026-11-09", "2026-11-12"} & {s["day"] for s in fewer["sessions"]}
+    assert {"lundi", "jeudi"} <= {r["weekday"] for r in fewer["rejected"]}
+    assert "Il est libre cette semaine" in " ".join(r["reason"] for r in fewer["rejected"])
 
 
 def test_blocks_the_agent_composed_go_through_the_same_door(world):
@@ -158,14 +184,20 @@ def test_staged_blocks_that_clash_or_overlap_are_refused_with_the_reason(world):
 def test_a_sentence_after_day_is_a_request_not_a_command(make_guardian):
     g = make_guardian(NOW)
     assert commands.free_text("essayons d'organiser ma semaine") == "essayons d'organiser ma semaine"
-    assert commands.free_text("plan tomorrow") == "" and commands.free_text("organise") == ""
+    assert commands.free_text("plan tomorrow") == "" and commands.free_text("write on") == ""
     assert commands.free_text("") == "" and commands.free_text("--help me") == ""
-    hint = commands.run(g, "essayons")
-    assert "without /day" in hint and "/day setup" not in hint  # one line, not the list of every command
-    short, full = commands.run(g, ""), commands.run(g, "help")
-    assert "plain words" in short and "/day kind" not in short and "/day kind" in full
+    # what used to be a syntax to learn is a request now, even one word or a fragment of the old syntax
+    for loose in ("organise", "real=90", "set work_hours=09:00-19:00", "kind sport real=2h", "took sport 90", "setup"):
+        assert commands.free_text(loose) == loose
+    hint = commands.run(g, "essayons")  # the command line (no gateway hook) still answers in one line
+    assert "without /day" in hint and "/day setup" not in hint
+    short, full = commands.run(g, ""), commands.run(g, "help all")
+    assert commands.run(g, "help") == short
+    assert "your own words" in short and "/day kind" not in short and "=" not in short and "/day kind" in full
+    assert len(short.splitlines()) <= 6 and len(short) < 600
     for name in commands.KNOWN - {"help"}:  # every command the dispatcher knows is in the list
         assert "I do not know" not in commands.run(make_guardian(NOW), name)
+    assert commands.DIRECT <= commands.KNOWN and "set" not in commands.DIRECT
 
 
 def test_the_gateway_hook_hands_a_sentence_to_the_agent(tmp_path, monkeypatch):
@@ -179,8 +211,11 @@ def test_the_gateway_hook_hands_a_sentence_to_the_agent(tmp_path, monkeypatch):
     assert said == {"action": "rewrite", "text": "Use the agenda-guardian tools (day_*) for this request: "
                                                  "essayons de placer 3 séances de sport"}
     assert hook(event=SimpleNamespace(text="/day@guardian_bot place du sport"))["action"] == "rewrite"
-    for text in ("/day plan tomorrow", "/day", "/day oops", "hello /day there", "place du sport", ""):
-        assert hook(event=SimpleNamespace(text=text)) is None
+    for text in ("/day plan tomorrow", "/day", "/day write on", "/day undo", "/day help", "hello /day there",
+                 "place du sport", ""):
+        assert hook(event=SimpleNamespace(text=text)) is None  # the format-free commands stay with the plugin
+    for text in ("/day oops", "/day real=90", "/day set work_hours=09:00-19:00", "/day setup", "/day took sport 90"):
+        assert hook(event=SimpleNamespace(text=text))["action"] == "rewrite"  # the rest is a request in words
     assert hook(event=None) is None and hook() is None  # never raises into the gateway
 
 
@@ -196,3 +231,33 @@ def test_the_rules_only_name_tools_that_exist(tmp_path, monkeypatch):
         named = set(re.findall(r"\bday_[a-z_]+", text))
         assert named and named <= set(tools), (lang, named - set(tools))
         assert "day_week_plan" in named and "day_stage" in named
+
+
+def test_a_real_week_request_is_placed_in_one_call_whatever_the_history_says(make_guardian, tmp_path):
+    """Théo's request of 6 Nov: his history called Monday to Wednesday afternoons 'usually taken' while the week itself
+    held three appointments. 0.3 left most days out and the agent wrote the plan by hand; now everything is placed."""
+    install_script(tmp_path)
+    cal = FakeGoogle()
+    cal.weekly("Cadre souple", 1, "13:00", "19:00", FIRST_HISTORY_MONDAY, 8)  # every Monday afternoon
+    cal.weekly("Appel assurance", 2, "09:00", "12:30", FIRST_HISTORY_MONDAY, 8, skip=(3,))  # Tuesday morning, 7 of 8
+    cal.weekly("Visio club", 2, "13:00", "18:00", FIRST_HISTORY_MONDAY, 8, skip=(1, 4, 6))  # Tuesday afternoon, 5 of 8
+    cal.weekly("Rendez-vous", 3, "13:00", "19:00", FIRST_HISTORY_MONDAY, 8, skip=(1, 4, 6))  # Wednesday afternoon
+    cal.add("Djamila", datetime(2026, 11, 9, 10, 0), datetime(2026, 11, 9, 10, 30))
+    cal.add("Anton", datetime(2026, 11, 11, 14, 0), datetime(2026, 11, 11, 14, 30))
+    cal.add("Café", datetime(2026, 11, 12, 9, 0), datetime(2026, 11, 12, 11, 0))
+    g = make_guardian(NOW, run=cal)
+    g.set_rules([("calendar", "google"), ("language", "fr")])
+    plan = g.week_plan([
+        {"name": "sport", "minutes": 120, "sessions": 3, "before_minutes": 15, "after_minutes": 30,
+         "window": "18:00-22:00"},
+        {"name": "appels clients", "minutes": 150, "sessions": 2, "window": "09:00-12:30"},
+        {"name": "take off", "minutes": 120, "per_day": 2, "window": "13:00-19:00"}])
+    placed = {a["activity"]: (a["placed"], a["wanted"]) for a in plan["activities"]}
+    assert placed == {"sport": (3, 3), "appels clients": (2, 2), "take off": (14, 14)}
+    assert not created(cal) and plan["calendar_write"] is False
+    assert not any("plage" in q for q in plan["questions"])  # nothing asked about a time window
+    # the sheet-based road (day_propose with a saved Tuesday-afternoon sport): 0.3 and 0.4 answered "no slot fits"
+    g.kind_set("sport-aprem", 120, 15, 30, "13:00-18:00", "mar")
+    alone = g.propose("sport-aprem", 1, date(2026, 11, 10), date(2026, 11, 10))
+    assert len(alone["sessions"]) == 1 and alone["sessions"][0]["start"].endswith("13:45:00")  # lunch is protected until 13:30
+    assert "libre cette semaine" in " ".join(alone["sessions"][0]["reasons"])

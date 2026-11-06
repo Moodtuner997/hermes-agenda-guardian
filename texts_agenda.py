@@ -12,22 +12,23 @@ EN = {
     # --- activity sheets ---
     "agent_propose": "Tell the user this proposal in plain words in their language: each slot with its reasons, the "
                      "days left out and why. Then ask the questions listed here. Do not call day_confirm until they "
-                     "clearly say yes.",
+                     "clearly say yes. Speak plainly: no command syntax.",
     "kind_name": "Give the activity a short name (for example sport).",
     "kind_real_range": "The activity itself must take between 5 and 480 minutes.",
     "kind_pad_range": "The time before and after must be between 0 and 180 minutes.",
     "kind_too_big": "Time before + activity + time after is {total} min, but {start}-{end} only leaves {room} min: "
                     "widen the window or shorten the activity.",
-    "kind_window_needed": "When can it happen? Give a window such as 18:00-22:00 (the whole thing has to fit in it).",
-    "kind_real_needed": "How long does '{name}' really take? Add real=2h (or real=90).",
+    "window_default": "'{name}': no time window given, so I took your work hours ({start}-{end}). Tell me if you "
+                      "prefer another one.",
+    "kind_real_needed": "How long does '{name}' really take (the activity itself)?",
     "habit_usage": "/day habit <day> <HH:MM-HH:MM> <what>, for example /day habit wed 18:00-21:00 family dinner",
     "propose_usage": "/day propose <activity> [count] [days=mon,thu] [from=tomorrow] [to=+6]",
     "ok_usage": "/day ok <proposal number> [days=mon]",
     "took_usage": "/day took <session number or activity> <minutes>",
     "kind_saved": "Saved. {line}",
     "kind_removed": "Forgot the activity '{name}'.",
-    "kind_unknown": "No activity called '{name}'. Known: {known}. Create it with /day kind {name} real=2h ...",
-    "kinds_none": "No activity yet. Example: /day kind sport real=2h before=15 after=30 window=18:00-22:00 days=mon,thu",
+    "kind_unknown": "No activity called '{name}'. Known: {known}. Tell me how long it takes and I will remember it.",
+    "kinds_none": "No activity yet. Tell me, for example, 'sport takes 2 hours, I need 15 minutes before and 30 after'.",
     "any_day": "any day",
     "kind_line": "{name}: {real} min, +{before} min before, +{after} min after, between {start} and {end}, {days}",
     "kind_measured": "[measured: x{factor} over {n} sessions]",
@@ -38,14 +39,14 @@ EN = {
     "habit_unknown": "No habit #{id}.",
     "habit_removed": "Habit #{id} removed.",
     "habit_line": "#{id} {day} {start}-{end}  {label}",
-    "habits_none": "No habit noted. Example: /day habit wed 18:00-21:00 family dinner",
+    "habits_none": "No habit noted. Tell me, for example, 'on Wednesday evenings I have a family dinner'.",
     # --- proposals ---
     "propose_need_calendar": "I need to read your calendar before I can propose anything: set calendar=google first.",
     "propose_count": "Ask for between 1 and 7 sessions.",
     "propose_range": "The range must be at most 31 days and end after it starts.",
     "propose_unreadable": "I could not read the calendar ({why}), so I propose nothing rather than guess.",
     "q_unlisted": "Is anything planned on {days} at those times that is not in your calendar?",
-    "q_validate": "Do you want me to write this to your calendar? (nothing is written until you say yes: /day ok {id})",
+    "q_validate": "Do you want me to write this to your calendar? (nothing is written until you say yes)",
     "prop_head": "Proposal #{id}: {kind}, {n} of {wanted} session(s). Nothing is written to your calendar.",
     "prop_none": "No slot fits in this range.",
     "prop_brief": "In short: {chosen}, slots your calendar and its history show as free.",
@@ -56,13 +57,13 @@ EN = {
     "prop_adjacent": "Some sessions are on consecutive days: there was no better choice in this range.",
     "prop_rejected": "Days I left out, and why",
     "prop_before": "Before you validate",
-    "prop_writes_on": "Writing is on: /day ok {id} writes it, /day undo takes it back.",
+    "prop_writes_on": "Writing is on: say yes and I write it, say 'undo' and I take back what I wrote.",
     "prop_writes_off": "Writing is off. To allow it once and for all: /day write on (you type this, not the agent).",
     "rej_habit": "{day}: you told me '{label}' ({start}-{end}).",
     "rej_busy": "{day}: already taken by {events}.",
     "rej_small": "{day}: no gap of {total} min once your meetings and breaks are kept.",
     "rej_usual": "{day}: usually taken, {taken} of the last {weeks} weeks had something between {start} and {end} "
-                 "(for example '{example}').",
+                 "(for example '{example}'). It is free this week though: say so if you want this day.",
     "r_free": "Your calendar is free on {name} from {a} to {b}.",
     "r_thin": "History is too short ({n} week(s) with events): I cannot check your usual week.",
     "r_hist_free": "History: {day}s between {start} and {end} were free {weeks} weeks out of {weeks}.",
@@ -70,6 +71,8 @@ EN = {
                    "(for example '{example}'), less than half, so I keep this day.",
     "r_hist_forced": "History: {day}s between {start} and {end} were taken {taken} week(s) out of {weeks} (for example "
                      "'{example}'). Kept because you asked for this day.",
+    "r_hist_usual_free": "History: {day}s between {start} and {end} were taken {taken} week(s) out of {weeks} (for "
+                         "example '{example}'), but your calendar is free this week: I keep this day, as a last choice.",
     "r_load_heavy": "{day}s are usually a heavy day (about {hours} of events).",
     "r_load_normal": "{day}s are usually a normal day (about {hours} of events).",
     "r_load_light": "{day}s are usually a light day (about {hours} of events).",
@@ -80,10 +83,12 @@ EN = {
     "r_spread": "Spread out: {n} day(s) from the nearest other session.",
     "n_allday": "All-day event that day: '{title}'. Check it does not matter.",
     "n_usual": "This day is usually taken ({taken} of {weeks} weeks): you asked for it explicitly.",
+    "n_usual_free": "This day is usually taken ({taken} of {weeks} weeks) but free in your calendar this week: tell me "
+                    "if something is planned that is not in it.",
     # --- writing ---
     "write_needs_google": "Writing is only possible on a Google calendar (calendar=google).",
     "write_on": "Writing is on. I will still show every proposal first and write only after your yes. "
-                "Only events I create can ever be removed by me: /day undo.",
+                "Only events I create can ever be removed by me: say 'undo'.",
     "write_off": "Writing is off. I only read your calendar.",
     "confirm_off": "Writing to your calendar is off. Type /day write on yourself if you want it.",
     "confirm_unknown": "No proposal #{id}.",
@@ -94,9 +99,9 @@ EN = {
                        "Ask for a new one.",
     "confirm_nothing": "No session of this proposal matches.",
     "confirm_clash": "{day}: something was added to your calendar since the proposal ('{title}'): not written.",
-    "confirm_failed": "{day}: the calendar refused ({why}). What was created stays recorded: /day undo {group}.",
+    "confirm_failed": "{day}: the calendar refused ({why}). What was created stays recorded: say 'undo {group}'.",
     "confirm_line": "Written #{group}: {kind}, {day} {date} {block} ({n} event(s)) {link}",
-    "confirm_undo": "Changed your mind: /day undo (last one), /day undo <number> or /day undo all. "
+    "confirm_undo": "Changed your mind? Say 'undo' (the last one), 'undo <number>' or 'undo all'. "
                     "Only events written here are ever removed.",
     "event_desc": "Created by agenda-guardian (session #{id}). Safe to delete, nothing else depends on it.",
     "part_before": "{name}: get ready",
@@ -108,12 +113,13 @@ EN = {
     "undo_deleted": "{summary} ({start}): removed.",
     "undo_gone": "{summary} ({start}): already gone from your calendar.",
     "undo_rewritten": "{summary} ({start}): you rewrote it since, so I left it alone.",
-    "took_unknown": "No finished activity matches '{ref}' (give the session number or the activity name).",
+    "took_unknown": "No finished activity matches '{ref}'. Ask which activity it was.",
+    "took_none": "No finished session to measure. Ask which activity it was.",
     "took_start": "{n} of {need} measurements: after that I correct the length with your own pace.",
     "took_now": "Your {kind} sessions now run at x{factor} of what you say ({n} measurements).",
     "took_msg": "{kind}: planned {planned} min, took {real} min. {calib}",
     "took_ask": "{kind} was planned until {end}. How long did it really take (the activity itself)? "
-                "Reply with the minutes (session #{group}); that is how the next proposal gets closer.",
+                "Just reply with the duration, for example 1h30 (session #{group}); that is how the next proposal gets closer.",
     # --- a whole week in one request, composed blocks, plain words ---
     "free_text_prefix": "Use the agenda-guardian tools (day_*) for this request: ",
     "agent_week": "Tell the user this week in plain words in their language: day by day, then why for each activity "
@@ -130,7 +136,8 @@ EN = {
     "week_count": "Give between 1 and 6 activities to plan.",
     "week_number": "'{name}': durations and counts must be whole numbers.",
     "week_range": "'{name}': {key} must be between {low} and {high}.",
-    "week_minutes": "How long does one '{name}' session take? Give the minutes (the user's own figure).",
+    "week_minutes": "No length for '{name}'. Pick a sensible one yourself, say it to the user as an assumption "
+                    "(they correct it with their yes or no) and call again.",
     "week_head": "Proposal #{id}: your week, {n} session(s). Nothing is written to your calendar.",
     "week_why": "Why",
     "week_each": "{name}: {got} of {wanted} session(s)",
@@ -152,17 +159,18 @@ FR = {
     "kind_pad_range": "Le temps avant et après doit être compris entre 0 et 180 minutes.",
     "kind_too_big": "Avant + activité + après font {total} min, mais {start}-{end} ne laisse que {room} min : "
                     "élargis la plage ou raccourcis l'activité.",
-    "kind_window_needed": "Quand est-ce possible ? Donne une plage comme 18:00-22:00 (tout doit y tenir).",
-    "kind_real_needed": "Combien de temps « {name} » prend-il vraiment ? Ajoute real=2h (ou real=90).",
+    "window_default": "« {name} » : pas de plage horaire donnée, j'ai pris tes heures de travail ({start}-{end}). "
+                      "Dis-moi si tu préfères une autre plage.",
+    "kind_real_needed": "Combien de temps « {name} » prend-il vraiment (l'activité elle-même) ?",
     "habit_usage": "/day habit <jour> <HH:MM-HH:MM> <quoi>, par exemple /day habit mer 18:00-21:00 repas de famille",
     "propose_usage": "/day propose <activité> [nombre] [days=lun,jeu] [from=demain] [to=+6]",
     "ok_usage": "/day ok <numéro de proposition> [days=lun]",
     "took_usage": "/day took <numéro de séance ou activité> <minutes>",
     "kind_saved": "Enregistré. {line}",
     "kind_removed": "J'oublie l'activité « {name} ».",
-    "kind_unknown": "Aucune activité nommée « {name} ». Connues : {known}. Crée-la avec /day kind {name} real=2h ...",
-    "kinds_none": "Aucune activité pour l'instant. Exemple : /day kind sport real=2h before=15 after=30 "
-                  "window=18:00-22:00 days=lun,jeu",
+    "kind_unknown": "Aucune activité nommée « {name} ». Connues : {known}. Dis-moi combien de temps elle prend et je la retiens.",
+    "kinds_none": "Aucune activité pour l'instant. Dis-moi par exemple « le sport dure 2 h, il me faut 15 min avant "
+                  "et 30 min après ».",
     "any_day": "n'importe quel jour",
     "kind_line": "{name} : {real} min, +{before} min avant, +{after} min après, entre {start} et {end}, {days}",
     "kind_measured": "[mesuré : x{factor} sur {n} séances]",
@@ -174,14 +182,14 @@ FR = {
     "habit_unknown": "Pas d'habitude n°{id}.",
     "habit_removed": "Habitude n°{id} retirée.",
     "habit_line": "n°{id} {day} {start}-{end}  {label}",
-    "habits_none": "Aucune habitude notée. Exemple : /day habit mer 18:00-21:00 repas de famille",
+    "habits_none": "Aucune habitude notée. Dis-moi par exemple « le mercredi soir, j'ai un repas de famille ».",
     # --- propositions ---
     "propose_need_calendar": "Je dois lire ton agenda avant de proposer quoi que ce soit : règle d'abord calendar=google.",
     "propose_count": "Demande entre 1 et 7 séances.",
     "propose_range": "La période doit durer 31 jours au plus et finir après son début.",
     "propose_unreadable": "Je n'ai pas pu lire l'agenda ({why}) : je ne propose rien plutôt que de deviner.",
     "q_unlisted": "Y a-t-il quelque chose de prévu {days}, à ces horaires, qui n'est pas dans ton agenda ?",
-    "q_validate": "Je l'écris dans ton agenda ? (rien n'est écrit tant que tu n'as pas dit oui : /day ok {id})",
+    "q_validate": "Je l'écris dans ton agenda ? (rien n'est écrit tant que tu n'as pas dit oui)",
     "prop_head": "Proposition n°{id} : {kind}, {n} séance(s) sur {wanted}. Rien n'est écrit dans ton agenda.",
     "prop_none": "Aucun créneau ne convient sur cette période.",
     "prop_brief": "En bref : {chosen}, des créneaux que ton agenda et son historique montrent libres.",
@@ -192,14 +200,14 @@ FR = {
     "prop_adjacent": "Certaines séances tombent deux jours de suite : il n'y avait pas mieux sur cette période.",
     "prop_rejected": "Les jours écartés, et pourquoi",
     "prop_before": "Avant de valider",
-    "prop_writes_on": "L'écriture est activée : /day ok {id} l'écrit, /day undo le retire.",
+    "prop_writes_on": "L'écriture est activée : dis oui et je l'écris, dis « annule » et je retire ce que j'ai écrit.",
     "prop_writes_off": "L'écriture est désactivée. Pour l'autoriser une fois pour toutes : /day write on "
                        "(c'est toi qui le tapes, pas l'agent).",
     "rej_habit": "{day} : tu m'as dit « {label} » ({start}-{end}).",
     "rej_busy": "{day} : déjà pris par {events}.",
     "rej_small": "{day} : aucun trou de {total} min une fois tes rendez-vous et leurs marges gardés.",
     "rej_usual": "{day} : d'habitude pris, {taken} des {weeks} dernières semaines avaient quelque chose entre "
-                 "{start} et {end} (par exemple « {example} »).",
+                 "{start} et {end} (par exemple « {example} »). Il est libre cette semaine : dis-le-moi si tu veux ce jour.",
     "r_free": "Ton agenda est libre {name} de {a} à {b}.",
     "r_thin": "L'historique est trop court ({n} semaine(s) avec des événements) : je ne peux pas vérifier ta "
               "semaine habituelle.",
@@ -208,6 +216,8 @@ FR = {
                    "(par exemple « {example} »), moins de la moitié : je garde ce jour.",
     "r_hist_forced": "Historique : le {day} entre {start} et {end} était pris {taken} semaine(s) sur {weeks} (par "
                      "exemple « {example} »). Je le garde parce que tu as demandé ce jour.",
+    "r_hist_usual_free": "Historique : le {day} entre {start} et {end} était pris {taken} semaine(s) sur {weeks} (par "
+                         "exemple « {example} »), mais ton agenda est libre cette semaine : je garde ce jour, en dernier choix.",
     "r_load_heavy": "Le {day} est d'habitude une journée chargée (environ {hours} d'événements).",
     "r_load_normal": "Le {day} est d'habitude une journée normale (environ {hours} d'événements).",
     "r_load_light": "Le {day} est d'habitude une journée légère (environ {hours} d'événements).",
@@ -218,10 +228,12 @@ FR = {
     "r_spread": "Espacé : {n} jour(s) de la séance la plus proche.",
     "n_allday": "Événement sur toute la journée ce jour-là : « {title} ». Vérifie qu'il ne gêne pas.",
     "n_usual": "Ce jour est d'habitude pris ({taken} semaines sur {weeks}) : tu l'as demandé explicitement.",
+    "n_usual_free": "Ce jour est d'habitude pris ({taken} semaines sur {weeks}) mais libre dans ton agenda cette "
+                    "semaine : dis-moi s'il y a quelque chose de prévu qui n'y figure pas.",
     # --- écriture ---
     "write_needs_google": "L'écriture n'est possible que sur un agenda Google (calendar=google).",
     "write_on": "L'écriture est activée. Je te montre toujours la proposition d'abord et je n'écris qu'après ton oui. "
-                "Je ne peux retirer que ce que j'ai écrit moi-même : /day undo.",
+                "Je ne peux retirer que ce que j'ai écrit moi-même : dis « annule ».",
     "write_off": "L'écriture est désactivée. Je lis seulement ton agenda.",
     "confirm_off": "L'écriture dans ton agenda est désactivée. Tape /day write on toi-même si tu la veux.",
     "confirm_unknown": "Pas de proposition n°{id}.",
@@ -233,9 +245,9 @@ FR = {
     "confirm_nothing": "Aucune séance de cette proposition ne correspond.",
     "confirm_clash": "{day} : quelque chose s'est ajouté à ton agenda depuis la proposition (« {title} ») : "
                      "rien d'écrit.",
-    "confirm_failed": "{day} : l'agenda a refusé ({why}). Ce qui a été créé reste enregistré : /day undo {group}.",
+    "confirm_failed": "{day} : l'agenda a refusé ({why}). Ce qui a été créé reste enregistré : dis « annule {group} ».",
     "confirm_line": "Écrit n°{group} : {kind}, {day} {date} {block} ({n} événement(s)) {link}",
-    "confirm_undo": "Tu changes d'avis : /day undo (la dernière), /day undo <numéro> ou /day undo all. "
+    "confirm_undo": "Tu changes d'avis ? Dis « annule » (la dernière), « annule n°… » ou « annule tout ». "
                     "Seul ce qui a été écrit ici est retiré.",
     "event_desc": "Créé par agenda-guardian (séance n°{id}). Tu peux le supprimer, rien d'autre n'en dépend.",
     "part_before": "{name} : préparation",
@@ -247,13 +259,14 @@ FR = {
     "undo_deleted": "{summary} ({start}) : retiré.",
     "undo_gone": "{summary} ({start}) : déjà disparu de ton agenda.",
     "undo_rewritten": "{summary} ({start}) : tu l'as réécrit depuis, je n'y touche pas.",
-    "took_unknown": "Aucune activité terminée ne correspond à « {ref} » (donne le numéro de séance ou le nom).",
+    "took_unknown": "Aucune activité terminée ne correspond à « {ref} ». Demande de quelle activité il s'agit.",
+    "took_none": "Aucune séance terminée à mesurer. Demande de quelle activité il s'agit.",
     "took_start": "{n} mesure(s) sur {need} : ensuite je corrige la durée avec ton propre rythme.",
     "took_now": "Tes séances de {kind} tournent maintenant à x{factor} de ce que tu annonces ({n} mesures).",
     "took_msg": "{kind} : prévu {planned} min, réel {real} min. {calib}",
     "took_ask": "{kind} était prévu jusqu'à {end}. Combien de temps ça a vraiment pris (l'activité elle-même) ? "
-                "Réponds avec les minutes (séance n°{group}) : c'est comme ça que la prochaine proposition se "
-                "rapproche de la réalité.",
+                "Réponds juste la durée, par exemple 1h30 (séance n°{group}) : c'est comme ça que la prochaine "
+                "proposition se rapproche de la réalité.",
     # --- la semaine en une demande, blocs composés, phrase libre ---
     "free_text_prefix": "Utilise les outils agenda-guardian (day_*) pour cette demande : ",
     "r_hist_over": "Historique : le {day} entre {start} et {end} était pris {taken} semaine(s) sur {weeks}, mais plus "
@@ -264,7 +277,8 @@ FR = {
     "week_count": "Donne entre 1 et 6 activités à placer.",
     "week_number": "« {name} » : les durées et nombres doivent être des nombres entiers.",
     "week_range": "« {name} » : {key} doit être compris entre {low} et {high}.",
-    "week_minutes": "Combien de temps dure une séance de « {name} » ? Donne les minutes (le chiffre de l'utilisateur).",
+    "week_minutes": "Pas de durée pour « {name} ». Choisis-en une raisonnable toi-même, dis-la à l'utilisateur "
+                    "comme une hypothèse (son oui ou son non la corrige) et rappelle l'outil.",
     "week_head": "Proposition n°{id} : ta semaine, {n} séance(s). Rien n'est écrit dans ton agenda.",
     "week_why": "Pourquoi",
     "week_each": "{name} : {got} sur {wanted} séance(s)",

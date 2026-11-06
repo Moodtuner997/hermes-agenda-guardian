@@ -10,15 +10,17 @@ from .texts import tr
 
 _DURATION = re.compile(r"^\d+(h(\d+)?|m|min)?$|^\d+h\d*m?$", re.I)
 
-KNOWN = frozenset({
-    "help", "setup", "set", "add", "list", "ls", "tasks", "plan", "now", "done", "drop", "rm", "brief", "nudge",
-    "kind", "habit", "propose", "ok", "confirm", "undo", "took", "write", "cron"})
+# Commands that need no format: the dispatcher answers them. After /day anything else is a request in plain words
+# (a sentence, a fragment, or a syntax nobody should have to learn): the gateway hook hands it to the agent.
+DIRECT = frozenset({"help", "list", "ls", "tasks", "plan", "now", "brief", "nudge", "ok", "confirm", "undo", "write",
+                    "cron"})
+KNOWN = DIRECT | frozenset({"setup", "set", "add", "done", "drop", "rm", "kind", "habit", "propose", "took"})
 
 
 def free_text(raw: str) -> str:
-    """What follows /day when it is a sentence, not a command: the request to hand to the agent (else "")."""
+    """What follows /day when it is not one of the format-free commands: the request to hand to the agent (else "")."""
     words = (raw or "").split()
-    if len(words) < 2 or words[0].lower().lstrip("-") in KNOWN:
+    if not words or words[0].lower().lstrip("-") in DIRECT:
         return ""
     return " ".join(words)
 
@@ -116,7 +118,7 @@ def run(guardian: Guardian, raw: str) -> str:
         if not tokens:
             return tr(lang, "help")
         if tokens[0] in ("help", "-h", "--help"):
-            return tr(lang, "help_full")
+            return tr(lang, "help_full" if len(tokens) > 1 and tokens[1].lower() in ("all", "tout", "full") else "help")
         command, args = tokens[0].lower(), tokens[1:]
         if command == "setup":
             return guardian.setup_auto() if args and args[0].lower() == "auto" else guardian.setup_text()

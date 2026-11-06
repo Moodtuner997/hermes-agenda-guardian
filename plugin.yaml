@@ -1,7 +1,7 @@
 name: agenda-guardian
 label: Agenda Guardian
 kind: standalone
-version: "0.4.0"
+version: "0.5.0"
 manifest_version: 2
 author: Moodtuner997
 homepage: https://github.com/Moodtuner997/hermes-agenda-guardian
@@ -11,11 +11,12 @@ description: >
   median error. It places tasks in the free time around the meetings of any calendar source (Google Workspace
   skill, ICS file or URL, JSON file, or any command that prints event JSON) and every block states its reason.
   Activities such as sport get a proposal that explains itself from eight weeks of your calendar history, and a
-  whole week (sport, calls, a daily course) is placed in one request, each activity around the others. A habit
-  that stopped weeks ago no longer rules a day out. Reads your calendar by default. Writing to a
+  whole week (sport, calls, a daily course) is placed in one request, each activity around the others, and you
+  talk to it in plain words: no syntax to learn, a missing figure is assumed and said. History orders the days
+  but never rules out a day your calendar leaves free. Reads your calendar by default. Writing to a
   Google calendar is off until you type /day write on; then it adds events marked as its own, only after you
-  say yes, and removes only those; plans the agent composes go through the same road. A /day message that is a
-  sentence, not a command, is handed to the agent. Deterministic, no model call.
+  say yes, and removes only those; plans the agent composes go through the same road. A /day message that is not one of
+  the few format-free commands is handed to the agent. Deterministic, no model call.
 requires_hermes: ">=0.22.7"
 provides_tools:
   - day_setup

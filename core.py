@@ -12,7 +12,8 @@ from pathlib import Path
 from typing import Callable
 
 from . import brief, discover, planner, profile as prof, sources, store
-from .model import Block, Plan, Task
+from .agenda import AgendaMixin
+from .model import Block, Plan, Task, UserError  # noqa: F401  (UserError is part of core's public surface)
 from .texts import tr
 
 JOB_BRIEF, JOB_NUDGE = "agenda-guardian-brief", "agenda-guardian-nudge"
@@ -34,10 +35,6 @@ if text:
 
 _WEEKDAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6,
              "lun": 0, "mar": 1, "mer": 2, "jeu": 3, "ven": 4, "sam": 5, "dim": 6}
-
-
-class UserError(ValueError):
-    """A mistake in what the user typed; the message tells them how to fix it."""
 
 
 def parse_minutes(text: str, lang: str = "en") -> int:
@@ -64,7 +61,7 @@ def parse_day(text: str, today: date, lang: str = "en") -> date:
         raise UserError(tr(lang, "bad_day", text=text))
 
 
-class Guardian:
+class Guardian(AgendaMixin):
     def __init__(self, db_path: Path, home: Path, now: Callable[[], datetime] | None = None,
                  run=subprocess.run, urlopen=urllib.request.urlopen,
                  cron: Callable[[dict], dict] | None = None, plugin_dir: Path | None = None):
@@ -322,6 +319,7 @@ class Guardian:
                     and not store.was_notified(self.conn, end_key)):
                 lines.append(t["nudge_end"].format(name=b.name, end=b.end.strftime("%H:%M"), id=b.task_id))
                 store.mark_notified(self.conn, end_key, now)
+        lines += self.kind_questions(now)
         return "\n".join(lines)
 
     # --- scheduling (two cron jobs that run a script, no model call) -------------------------------------

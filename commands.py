@@ -39,6 +39,63 @@ def _add(guardian: Guardian, args: list[str]) -> str:
     return guardian.add(" ".join(words), minutes, category, priority, due)
 
 
+def _split(args: list[str]) -> tuple[dict[str, str], list[str]]:
+    """key=value tokens and the plain words, in order."""
+    named, plain = {}, []
+    for token in args:
+        key, sep, value = token.partition("=")
+        if sep and key.isidentifier():
+            named[key.lower()] = value
+        else:
+            plain.append(token)
+    return named, plain
+
+
+def _kind(guardian: Guardian, args: list[str]) -> str:
+    lang = guardian.lang()
+    named, plain = _split(args)
+    if not plain:
+        return guardian.kinds_view()["text"]
+    if plain[-1].lower() == "none":
+        return guardian.kind_remove(" ".join(plain[:-1]))["text"]
+    name = " ".join(plain).lower()
+    old = next((k for k in guardian.kinds_view()["kinds"] if k["name"] == name), None)
+    if "real" in named:
+        real = parse_minutes(named["real"], lang)
+    elif old:
+        real = old["real_minutes"]
+    else:
+        raise UserError(tr(lang, "kind_real_needed", name=name))
+    before = parse_minutes(named["before"], lang) if "before" in named else (old["before_minutes"] if old else 0)
+    after = parse_minutes(named["after"], lang) if "after" in named else (old["after_minutes"] if old else 0)
+    days = named.get("days", ",".join(map(str, old["weekdays"])) if old else "")
+    return guardian.kind_set(name, real, before, after, named.get("window", ""), days)["text"]
+
+
+def _habit(guardian: Guardian, args: list[str]) -> str:
+    lang = guardian.lang()
+    if not args:
+        return guardian.habits_view()["text"]
+    if args[0].lower() in ("rm", "drop", "del") and len(args) == 2 and args[1].lstrip("#").isdigit():
+        return guardian.habit_remove(int(args[1].lstrip("#")))["text"]
+    if len(args) < 3:
+        raise UserError(tr(lang, "habit_usage"))
+    return guardian.habit_add(args[0], args[1], " ".join(args[2:]))["text"]
+
+
+def _propose(guardian: Guardian, args: list[str]) -> str:
+    lang = guardian.lang()
+    named, plain = _split(args)
+    if not plain:
+        raise UserError(tr(lang, "propose_usage"))
+    counted = len(plain) > 1 and plain[-1].isdigit()
+    name = " ".join(plain[:-1] if counted else plain)
+    today = guardian.now().date()
+    first = parse_day(named["from"], today, lang) if "from" in named else None
+    last = parse_day(named["to"], today, lang) if "to" in named else None
+    return guardian.propose(name, int(plain[-1]) if counted else 1, first, last, named.get("days", ""))["text"]
+
+
 def run(guardian: Guardian, raw: str) -> str:
     lang = "en"
     try:
@@ -79,6 +136,28 @@ def run(guardian: Guardian, raw: str) -> str:
             return guardian.brief_text()
         if command == "nudge":
             return guardian.nudge_text() or tr(lang, "nothing_now")
+        if command == "kind":
+            return _kind(guardian, args)
+        if command == "habit":
+            return _habit(guardian, args)
+        if command == "propose":
+            return _propose(guardian, args)
+        if command in ("ok", "confirm"):
+            named, plain = _split(args)
+            if not plain or not plain[0].lstrip("#").isdigit():
+                raise UserError(tr(lang, "ok_usage"))
+            return guardian.confirm(int(plain[0].lstrip("#")), named.get("days", ""))["text"]
+        if command == "undo":
+            return guardian.undo(args[0] if args else "last")["text"]
+        if command == "took":
+            if len(args) < 2:
+                raise UserError(tr(lang, "took_usage"))
+            return guardian.took(" ".join(args[:-1]), parse_minutes(args[-1], lang))["text"]
+        if command == "write":
+            action = args[0].lower() if args else "status"
+            if action in ("on", "off"):
+                return guardian.set_write(action == "on")["text"]
+            return tr(lang, "write_on" if guardian.write_enabled() else "write_off")
         if command == "cron":
             action = args[0].lower() if args else "status"
             if action == "on":

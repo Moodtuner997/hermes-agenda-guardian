@@ -1,10 +1,13 @@
 {
   "name": "agenda-guardian",
   "label": "Today",
-  "description": "Your day as a timeline: tasks placed around your meetings, each with the reason it is there.",
+  "description": "Your day and your week: tasks and activities placed around your meetings, each with the reason it is there.",
   "icon": "Calendar",
-  "version": "0.1.0",
-  "tab": { "path": "/day", "position": "after:analytics" },
+  "version": "0.3.0",
+  "tab": {
+    "path": "/day",
+    "position": "after:analytics"
+  },
   "entry": "dist/index.js",
   "css": "dist/style.css",
   "api": "plugin_api.py"

@@ -52,6 +52,20 @@ plan = tool("day_plan", {"day": "2026-11-09"})
 check("day_plan lists the task and the meeting", "Write the quote" in plan.get("plan", "")
       and "Client call" in plan.get("plan", ""), json.dumps(plan)[:300])
 
+kind = tool("day_kind", {"name": "sport", "real_minutes": 90, "before_minutes": 10, "after_minutes": 20,
+                         "window": "18:00-22:00"})
+check("day_kind saves an activity sheet", kind.get("ok") is True and kind.get("kind", {}).get("name") == "sport", json.dumps(kind)[:300])
+proposal = tool("day_propose", {"activity": "sport", "from_day": "2026-11-09", "to_day": "2026-11-11"})
+check("day_propose answers with reasons and says nothing was written",
+      proposal.get("ok") is True and proposal.get("sessions") and proposal["sessions"][0]["reasons"]
+      and "Nothing is written" in proposal.get("text", ""), json.dumps(proposal)[:400])
+blocked = tool("day_confirm", {"proposal_id": proposal.get("proposal_id", 1)})
+check("day_confirm is refused until the user typed /day write on",
+      blocked.get("ok") is False and "write on" in blocked.get("error", ""), json.dumps(blocked)[:300])
+week = tool("day_week", {"week_of": "2026-11-09"})
+check("day_week reads the week", week.get("ok") is True and week.get("week_start") == "2026-11-09"
+      and len(week.get("proposed", [])) >= 1, json.dumps(week)[:300])
+
 on = tool("day_schedule", {"action": "on", "time": "07:30"})
 print(json.dumps(on, ensure_ascii=False)[:400])
 check("day_schedule on is accepted by the cron tool", on.get("ok") is True, json.dumps(on)[:300])

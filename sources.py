@@ -238,25 +238,43 @@ def _run_json(argv: list[str], run) -> object:
 def fetch_events(profile: dict, day: date, home: Path, *, run=subprocess.run,
                  urlopen=urllib.request.urlopen) -> tuple[list[Event], list[str]]:
     """Events touching ``day`` and warnings. Raises SourceError when the source is configured but unreadable."""
+    return fetch_range(profile, day, day, home, run=run, urlopen=urlopen)
+
+
+def google_argv(home: Path, *args: str) -> list[str]:
+    """The Google Workspace skill's script, run with the interpreter Hermes itself runs on."""
+    script = home / GOOGLE_SCRIPT
+    if not script.exists():
+        raise SourceError(f"Google Workspace skill not found at {script}")
+    return [sys.executable, str(script), *args]
+
+
+def iso_utc(moment: datetime, tzname: str) -> str:
+    return _aware(moment, tzname).astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def fetch_range(profile: dict, first: date, last: date, home: Path, *, run=subprocess.run,
+                urlopen=urllib.request.urlopen) -> tuple[list[Event], list[str]]:
+    """Events touching the days ``first``..``last`` (both included) and warnings. A single day keeps the
+    original request (100 events); a longer range asks for up to 500 and warns when the answer was cut."""
     source = profile.get("calendar") or {"type": "none"}
     kind, tzname = source.get("type", "none"), profile.get("timezone", "")
     lang = profile.get("language", "en")
     warnings: list[str] = []
-    lo, hi = _day_bounds(day)
+    lo, hi = _day_bounds(first)[0], _day_bounds(last)[1]
+    limit = 100 if first == last else 500
     if kind == "none":
         return [], [tr(lang, "no_calendar")]
     if kind in ("google", "command"):
-        start_iso = _aware(lo, tzname).astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-        end_iso = _aware(hi, tzname).astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+        start_iso, end_iso = iso_utc(lo, tzname), iso_utc(hi, tzname)
         if kind == "google":
-            script = home / GOOGLE_SCRIPT
-            if not script.exists():
-                raise SourceError(f"Google Workspace skill not found at {script}")
-            argv = [sys.executable, str(script), "calendar", "list", "--start", start_iso, "--end", end_iso,
-                    "--max", "100"]
+            argv = google_argv(home, "calendar", "list", "--start", start_iso, "--end", end_iso, "--max", str(limit))
         else:
             argv = [a.replace("{start}", start_iso).replace("{end}", end_iso) for a in source["argv"]]
-        events = _json_events(_run_json(argv, run), tzname)
+        data = _run_json(argv, run)
+        events = _json_events(data, tzname)
+        if kind == "google" and isinstance(data, list) and len(data) >= limit and first != last:
+            warnings.append(tr(lang, "range_cut", n=limit))
     elif kind == "file":
         try:
             events = _json_events(json.loads(Path(source["path"]).read_text(encoding="utf-8")), tzname)
@@ -275,7 +293,13 @@ def fetch_events(profile: dict, day: date, home: Path, *, run=subprocess.run,
                 text = Path(location).read_text(encoding="utf-8", errors="replace")
         except OSError as exc:
             raise SourceError(f"cannot read the ICS calendar: {exc}")
-        events = parse_ics(text, day, tzname, warnings, lang)
+        events, seen = [], set()
+        for offset in range((last - first).days + 1):
+            for event in parse_ics(text, first + timedelta(days=offset), tzname, warnings, lang):
+                if event not in seen:
+                    seen.add(event)
+                    events.append(event)
+        warnings = list(dict.fromkeys(warnings))
     else:
         raise SourceError(f"unknown calendar type '{kind}'")
     events = sorted((e for e in events if e.end > lo and e.start < hi), key=lambda e: (e.start, e.end))

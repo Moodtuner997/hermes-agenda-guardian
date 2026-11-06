@@ -89,8 +89,9 @@ class Guardian:
             p["language"] = discover.language(self.home) or "en"
         if not prof.is_set(p, "timezone"):
             p["timezone"] = discover.timezone(self.home)
-        if p["language"] == "fr" and not prof.is_set(p, "protected"):
-            p["protected"] = [dict(x, name="déjeuner" if x["name"] == "lunch" else x["name"]) for x in p["protected"]]
+        if not prof.is_set(p, "protected"):  # a default is rebuilt each time, never frozen in the stored profile
+            p["protected"] = [dict(x, name="déjeuner" if p["language"] == "fr" else x["name"])
+                              for x in prof.DEFAULTS["protected"]]
         return p
 
     def lang(self) -> str:

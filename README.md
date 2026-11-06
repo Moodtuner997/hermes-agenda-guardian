@@ -169,7 +169,7 @@ knows of you and asks only to confirm or complete, in your language. It never in
 ## Development
 
 ```
-python -m pytest tests -q                  # 67 tests, no Hermes needed
+python -m pytest tests -q                  # 68 tests, no Hermes needed
 hermes plugins validate .
 HERMES_HOME=<home> <hermes python> tests/e2e_hermes.py     # real tool calls, real cron, no model
 python tests/make_demo_profile.py --home <home>             # an invented day for screenshots

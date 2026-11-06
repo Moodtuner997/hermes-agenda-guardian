@@ -123,3 +123,12 @@ def test_setup_tool_gives_the_agent_the_facts(tmp_path, monkeypatch):
     answer = json.loads(ctx.tools["day_setup"]({}))
     assert answer["found"]["google_calendar"] == "ready" and answer["found"]["can_adopt"]["calendar"] == "google"
     assert "propose each answer" in answer["for_agent"]
+
+
+def test_a_default_lunch_name_follows_the_language_and_is_not_frozen(make_guardian, monkeypatch):
+    monkeypatch.setenv("LANG", "fr_FR.UTF-8")
+    g = make_guardian()
+    commands.run(g, "set buffer_min=5")  # saves the profile while the language is French
+    assert g.profile()["protected"][0]["name"] == "déjeuner"
+    commands.run(g, "set language=en")
+    assert g.profile()["protected"][0]["name"] == "lunch"

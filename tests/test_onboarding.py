@@ -94,6 +94,8 @@ def test_setup_auto_adopts_a_working_google_calendar_and_says_so(make_guardian, 
     out = commands.run(g, "setup auto")
     assert "ok  calendar = google" in out and g.profile()["calendar"] == {"type": "google"}
     assert g.profile()["_set"]["calendar"] == "auto:2026-11-09"
+    assert "now google
+" in commands.run(g, "setup")
     assert prof.source_of(g.profile(), "calendar") == "detected in your Hermes profile on 2026-11-09"
     assert commands.run(g, "setup auto").startswith("Nothing more to adopt")
 

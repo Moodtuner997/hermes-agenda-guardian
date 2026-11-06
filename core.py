@@ -169,7 +169,8 @@ class Guardian:
             out.append("  " + T("adopt"))
 
         cats = ", ".join(f"{k} {v} min" for k, v in sorted(p["categories"].items())) or T("none_yet")
-        cal_text = (cal["type"] + f" ({cal.get('path') or ' '.join(cal.get('argv', []))})") if cal["type"] != "none" else T("none")
+        where = cal.get("path") or " ".join(cal.get("argv", []))
+        cal_text = (cal["type"] + (f" ({where})" if where else "")) if cal["type"] != "none" else T("none")
         protected = ", ".join(f"{x['name']} {x['start']}-{x['end']}" for x in p["protected"]) or T("none")
         focus = ", ".join(f"{x['start']}-{x['end']}" for x in p["focus"]) or T("none")
         out += ["", T("rules_head"),

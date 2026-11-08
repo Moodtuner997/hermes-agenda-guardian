@@ -190,6 +190,25 @@ the other settings of the call and tells the agent to ask you). You set it by ty
 chat (the plugin answers that command itself, it never goes through the agent), or `hermes guardian set calendar=...`
 in a terminal; `/day setup auto` adopts a working Google calendar the same way.
 
+- **Side roads, guarded since 0.5.2.** A `pre_tool_call` hook looks at the arguments of four tools, `terminal`,
+  `execute_code`, `write_file` and `patch`, and sends the call to Hermes' own approval gate when it is: `hermes ...
+  guardian` followed by `set ... calendar=...` or `setup auto` (quotes and line continuations are read the way a
+  shell reads them); a call to the package's `apply_setting`, `set_rules` or `save_profile` that mentions
+  `calendar`, or to `setup_auto` or `agenda_guardian`; or a mention of the plugin's folders (`plugins/`,
+  `plugin-data/` or `scripts/` followed by `agenda-guardian`) or of its database `guardian.db` (a read from the
+  terminal asks too; `read_file` and `search_files` are not watched). The prompt shows the whole call when it is
+  short, otherwise its start and every part that matched, and for `write_file` and `patch` the content that would be
+  written. The rule key hashes the whole call, content included, so an "always" answer covers that exact call and
+  nothing else. In a cron run nobody can answer, so the call is refused. **This is not a security boundary.** A call
+  that hides what it does is not recognised: base64, a path built in pieces, another interpreter, a script written
+  with `write_file` and run later (the content is shown, not scanned), `plugins/./agenda-guardian`, a relative path
+  after an approved `cd`. The agent's terminal already runs under Hermes' own approvals, and under `approvals.mode:
+  off` or Hermes' yolo mode (`hermes -z` sets it) Hermes answers yes without asking, as it does for every call. The
+  guard closes the obvious roads and puts a person on the one that would leave a program run at every plan. It reads
+  no config and no file, its patterns are bounded (0.6 s at worst on a 260 KB call, measured in the tests; Hermes
+  blocks a `pre_tool_call` that runs past 30 s), and an error in the matcher lets the call through. It needs Hermes
+  0.22.7 or later (`requires_hermes` says so; `approve` exists in 0.22.7 and 0.23.0).
+
 - **ICS over the network:** `https://` only. The host is resolved and every address it answers with must be public
   (loopback, private, link-local including the cloud metadata address, carrier-grade NAT and reserved ranges are
   refused); the connection goes to the address that was checked, with the host name kept for the certificate. A
@@ -268,13 +287,16 @@ Hermes config (the rule Hermes applies to its own `cronjob` tools; an unreadable
   `POST /proposals/<id>/refuse`, `POST /groups/<id>/undo` under `/api/plugins/agenda-guardian/`, behind the
   dashboard's own authentication. Writing from the dashboard needs the same `/day write on` switch.
 - **System prompt:** one short section (rules for the agent, about 1,700 characters, in your language).
-- **Hook:** one, `pre_gateway_dispatch`. It looks at the text of each incoming chat message and acts on one
+- **Hooks:** two. `pre_gateway_dispatch` looks at the text of each incoming chat message and acts on one
   case only: a message that starts with `/day` followed by anything other than a format-free command (`help`,
   `plan`, `now`, `list`, `brief`, `ok`, `undo`, `write`, `cron`), or `set` with a `calendar=` pair, or `setup auto`
   (those two are answered by the plugin itself, see Calendar sources). That message is rewritten
   into an ordinary request for the agent, prefixed with a pointer to the plugin's tools. It reads nothing else,
-  stores nothing and never drops a message; on any error it does nothing.
-- **Approvals:** the plugin touches no tool call. `day_schedule on` goes through the registry's `cronjob_manage`
+  stores nothing and never drops a message; on any error it does nothing. `pre_tool_call` reads the tool name and
+  the arguments of `terminal`, `execute_code`, `write_file` and `patch` (matched against fixed patterns, nothing
+  stored, no config read) and answers with Hermes' approval gate or, in a cron run, a refusal; on any error it
+  does nothing.
+- **Approvals:** apart from the guard above, the plugin touches no tool call. `day_schedule on` goes through the registry's `cronjob_manage`
   tool, so Hermes' own checks apply; the tool descriptions tell the agent to ask you first. The yes before a
   calendar write is the agent's to collect in conversation; what the plugin enforces itself is the switch you
   type, the recorded-events-only deletion and the stale-proposal and new-clash checks.
@@ -285,7 +307,10 @@ Hermes config (the rule Hermes applies to its own `cronjob` tools; an unreadable
   and an end-to-end run with real tool calls, real cron creation and Hermes' own script runner. On Windows, one
   real agent turn (Claude subscription provider) turned the schedule on through `day_schedule` and Hermes listed
   the two script-only jobs; the slash command, the CLI and the dashboard tab were exercised there too.
-  macOS is untested.
+- Every push and pull request runs the unit tests on Linux, Windows and macOS (GitHub-hosted `ubuntu-latest`,
+  `windows-latest`, `macos-latest`), then installs Hermes 0.22.7 from its lockfile, runs `hermes plugins validate
+  --install-deps` and the same end-to-end script on each. The approval prompt a human sees when the guard asks is
+  not exercised there: the end-to-end run replaces Hermes' gate with a recorder.
 - Delivery of the brief and reminders to a messaging platform (Telegram, WhatsApp...) rides on Hermes' own cron
   `deliver` and is not tested here: the end-to-end run creates the jobs and runs their scripts with Hermes' script
   runner, with the default local target.
@@ -301,7 +326,7 @@ Hermes config (the rule Hermes applies to its own `cronjob` tools; an unreadable
 - Time zones: set `timezone=Europe/Paris` for events with other zones; on Windows that needs the `tzdata`
   Python package. Without it, the computer's clock zone is used.
 - The plugin cannot stop another tool (the Google Workspace skill itself, the terminal) from writing to your
-  calendar. Its system prompt tells the agent not to, and every plan has a road in (`day_week_plan`,
+  calendar: the guard above covers the roads to the calendar source, not those writes. Its system prompt tells the agent not to, and every plan has a road in (`day_week_plan`,
   `day_stage`) so the agent has no reason to go around. Events written by another tool carry no marker, so
   `/day undo` cannot see them: that was seen once in real use, and is why `day_stage` exists.
 - A `/day ...` typed while the agent is still answering is queued by Hermes and reaches the agent as plain text,
@@ -315,7 +340,7 @@ Hermes config (the rule Hermes applies to its own `cronjob` tools; an unreadable
 ## Development
 
 ```
-python -m pytest tests -q                  # 276 tests, no Hermes needed
+python -m pytest tests -q                  # 359 tests, no Hermes needed
 hermes plugins validate .
 HERMES_HOME=<home> <hermes python> tests/e2e_hermes.py     # real tool calls, real cron, no model
 python tests/make_demo_profile.py --home <home>             # an invented day for screenshots

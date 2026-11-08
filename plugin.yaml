@@ -1,7 +1,7 @@
 name: agenda-guardian
 label: Agenda Guardian
 kind: standalone
-version: "0.5.1"
+version: "0.5.2"
 manifest_version: 2
 author: Moodtuner997
 homepage: https://github.com/Moodtuner997/hermes-agenda-guardian
@@ -16,7 +16,9 @@ description: >
   but never rules out a day your calendar leaves free. Reads your calendar by default. Writing to a
   Google calendar is off until you type /day write on; then it adds events marked as its own, only after you
   say yes, and removes only those; plans the agent composes go through the same road. A /day message that is not one of
-  the few format-free commands is handed to the agent. Deterministic, no model call.
+  the few format-free commands is handed to the agent. Only you set the calendar source; when the agent's terminal,
+  code or file tools take an obvious side road to it, the call goes to Hermes' own approval prompt. Deterministic,
+  no model call.
 requires_hermes: ">=0.22.7"
 provides_tools:
   - day_setup
@@ -36,3 +38,4 @@ provides_tools:
   - day_stage
 provides_hooks:
   - pre_gateway_dispatch
+  - pre_tool_call

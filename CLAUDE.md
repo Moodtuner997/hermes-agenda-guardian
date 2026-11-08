@@ -20,22 +20,35 @@ ni un agenda particulier.
 - Un calendrier illisible ou absent donne un avertissement visible, jamais un jour vide silencieux.
 - Un seul chemin d'écriture : tout ce qui s'écrit passe par une proposition (`day_propose`, `day_week_plan` ou
   `day_stage`, un plan composé par l'agent) puis `day_confirm`. La consigne système interdit tout autre outil
-  d'agenda ; le plugin ne peut pas le bloquer (voir Pièges).
+  d'agenda ; le plugin ne bloque pas les écritures Google des autres outils (le garde `pre_tool_call` ne couvre que les voies vers la
+  source d'agenda, voir Pièges).
 - Seul l'utilisateur fixe la source d'agenda (`calendar`) : aucun outil ne la pose, `google` et `none` compris
   (`apply_setting(..., from_tool=True)` refuse, `setup_auto(from_tool=True)` laisse l'agenda). `/day set … calendar=…` et
   `/day setup auto` tapés sont traités par le répartiteur (`commands.sets_calendar`), jamais réécrits pour l'agent.
+- `guard.py` (hook `pre_tool_call`, 0.5.2) : pour `terminal`, `execute_code`, `write_file` et `patch`, la commande
+  `hermes … guardian` qui pose `calendar` (`commands.sets_calendar`), les fonctions du paquet (`apply_setting`,
+  `set_rules`, `save_profile` avec `calendar` dans le texte ; `setup_auto` et `agenda_guardian` seuls) et le dossier du
+  plugin (`plugins/`, `plugin-data/`, `scripts/` + `agenda-guardian`) ou sa base passent par l'approbation de Hermes
+  (`approve`, une `rule_key` = hachage de l'appel entier contenu compris, jamais une clé du plugin) ; en session de cron :
+  `block`. L'invite montre l'appel entier s'il est court, sinon son début et chaque partie qui a déclenché, plus le
+  contenu d'un `write_file` ou d'un `patch`. Ce n'est pas une frontière de sécurité (commande masquée, script écrit puis
+  lancé : non vus, dit dans le README) ; une erreur du filtre laisse passer l'appel. Les motifs sont bornés et
+  `{0,40}+` est possessif (Python 3.11+, comme Hermes) : sans cela la regex est quadratique voire cubique et gèle tous les
+  outils (relecture du 8/11 : 67 s à 260 Ko ; maintenant 0,6 s au pire, test `LONG` de `test_guard.py`).
 - Le programme d'agenda (script Google ou `cmd:`) démarre avec `sources._child_env` (PATH, HOME, locale, TZ,
   HERMES_HOME, plus le minimum Windows) : jamais une clé de fournisseur ni une variable de proxy.
 - ICS par URL : `https` seul, toute adresse résolue publique, connexion à l'adresse vérifiée, redirection vers le même
   hôte seulement, ni proxy ni http (`sources.safe_urlopen`, défaut de `fetch_*` et de `Guardian`).
 - `day_schedule` on/off est refusé dans une session de cron tant que `cron.allow_agent_scheduling` n'est pas vrai
   (config illisible = refus ; `status` reste permis).
-- Chaque modification passe `python -m pytest tests -q` (276 tests), `hermes plugins validate .`, puis, si le cron,
+- Chaque modification passe `python -m pytest tests -q` (359 tests), `hermes plugins validate .`, puis, si le cron,
   le tableau de bord, un outil ou le hook bougent, `tests/e2e_hermes.py` avec l'interpréteur de Hermes (dans un
   `HERMES_HOME` jetable : un dossier avec `config.yaml` qui active le plugin et une copie du plugin).
 - README, PR et textes publics en anglais ; commits en français, format conventionnel.
 - Jamais de données réelles dans le dépôt : la démo vient de `tests/make_demo_profile.py` (noms inventés).
-- `platforms:` du catalogue = ce qui est réellement testé (Windows 11 et Linux arm64 ; macOS non testé).
+- `platforms:` du catalogue = ce qui est réellement testé : Windows 11, Linux arm64 et, depuis le 8/11, la CI GitHub
+  (`.github/workflows/ci.yml` : pytest, `hermes plugins validate` et `tests/e2e_hermes.py` sur ubuntu, windows et
+  macos-latest, Hermes v0.22.7 installé par `uv sync --locked`) ; une version ne s'annonce macOS que si ce job est vert.
 
 ## Pièges
 - Le dossier du dépôt n'est pas importable (tiret) : les tests chargent le paquet sous `agenda_guardian` ; les scripts
@@ -87,6 +100,22 @@ ni un agenda particulier.
   et refuse localhost, 127.0.0.1, http et une redirection vers un autre hôte (`https://www.github.com/`). `example.com`
   échoue sur ce poste (« unable to get local issuer certificate », même avec `urlopen` simple) : sonde réelle sur
   python.org.
-- Non prouvé : la 0.5.0 sur Telegram (crochet sur une vraie passerelle, agent qui appelle `day_week_plan` avec un
-  chiffre supposé au lieu de questionner ou d'écrire à la main), question de durée envoyée par le cron, livraison
-  Telegram/WhatsApp, macOS.
+- `pre_tool_call` (`guard.py`, 0.5.2), mesuré le 8/11 : `approve` et `request_tool_approval` existent aux étiquettes
+  Hermes v0.22.7 et v0.23.0 (`gh api …/contents/hermes_cli/plugins.py?ref=…`), l'A1 est en 0.23.0. Hermes bloque (fail
+  closed) un `pre_tool_call` qui dépasse `plugins.hook_callback_timeout` (30 s) : le garde ne lit ni config ni base.
+  `block` l'emporte sur `approve` ; en cron `approvals.cron_mode` pourrait auto-approuver, d'où un `block` direct. Noms
+  d'outils et arguments relevés dans Hermes : `terminal` (`command`, `workdir`), `execute_code` (`code`), `write_file`
+  (`path`, `content`), `patch` (`path`, `old_string`, `new_string`, `patch` en V4A). Le test e2e remplace
+  `tools.approval.request_tool_approval` par un enregistreur : l'invite interactive elle-même n'est pas exercée (avec
+  `HERMES_INTERACTIVE=1` et sans terminal elle attendrait sur stdin). Le garde ne couvre pas les écritures Google des
+  autres outils : décision de Théo si on veut l'étendre.
+- Prouvé le 8/11 : le crochet `pre_gateway_dispatch` dans une vraie passerelle (Hermes 0.22.7, adaptateur IRC local, même
+  entrée que Telegram dans `run_inbound.py`, vue dans la source, pas essayée sur Telegram) : `/day place deux séances…`
+  réécrit puis `day_week_plan` appelé, `/day plan demain` et `/day set calendar=cmd:…` répondus par le répartiteur sans
+  agent, écriture jamais activée. Un webhook ne peut pas porter un texte commençant par `/` (refus d'admission avant le
+  crochet). La question de durée du job de rappel passe par `cron.scheduler.run_job` (e2e). macOS : CI verte (34 contrôles
+  de l'e2e depuis le garde, validate, pytest) sur macos-latest arm64.
+- Non prouvé : le crochet sur Telegram même, la 0.5.x sur le téléphone de Théo, l'invite d'approbation interactive du garde
+  vue par un humain, la livraison Telegram/WhatsApp du rappel. Défaut vu : `/day set calendar="cmd:programme arg"` tapé dans
+  le chat est refusé (« is not key=value ») car le découpage coupe au premier espace ; la forme `/day set
+  "calendar=cmd:programme arg"` ou la CLI passe (ticket, pas corrigé : hors des quatre demandes).

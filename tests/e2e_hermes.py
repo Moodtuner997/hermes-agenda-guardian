@@ -12,6 +12,7 @@ that the scripts it wrote run under the scheduler's script runner.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -88,6 +89,28 @@ check("the gateway hook leaves a command alone",
 week = tool("day_week", {"week_of": "2026-11-09"})
 check("day_week reads the week", week.get("ok") is True and week.get("week_start") == "2026-11-09"
       and len(week.get("proposed", [])) >= 1, json.dumps(week)[:300])
+
+setup = tool("day_setup", {"settings": {"Calendar": "cmd:python -c print(1)", "buffer_min": "5"}})
+check("day_setup refuses a calendar source from a tool and still applies the rest",
+      setup.get("ok") is True and "refused  Calendar" in setup.get("result", "") and "ok  buffer_min" in setup.get("result", "")
+      and "for_agent" in setup, json.dumps(setup)[:300])
+check("the calendar is still the user's file", "Client call" in tool("day_plan", {"day": "2026-11-09"}).get("plan", ""))
+check("the gateway hook leaves a typed calendar command to the dispatcher",
+      invoke_hook("pre_gateway_dispatch", event=SimpleNamespace(text="/day set calendar=cmd:mycal"), gateway=None,
+                  session_store=None) == [])
+said = invoke_hook("pre_gateway_dispatch", event=SimpleNamespace(text="/day set work_hours=09:00-19:00"), gateway=None,
+                   session_store=None)
+check("the other settings still go to the agent", len(said) == 1 and said[0].get("action") == "rewrite", json.dumps(said)[:200])
+
+os.environ["HERMES_CRON_SESSION"] = "1"  # what a cron-spawned agent runs under
+try:
+    for action in ("on", "off"):
+        refused = tool("day_schedule", {"action": action})
+        check(f"day_schedule {action} is refused in a cron run", refused.get("ok") is False
+              and "refused inside a cron run" in refused.get("error", ""), json.dumps(refused)[:300])
+    check("day_schedule status still works in a cron run", tool("day_schedule", {"action": "status"}).get("ok") is True)
+finally:
+    os.environ.pop("HERMES_CRON_SESSION", None)
 
 on = tool("day_schedule", {"action": "on", "time": "07:30"})
 print(json.dumps(on, ensure_ascii=False)[:400])

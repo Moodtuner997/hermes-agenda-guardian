@@ -33,6 +33,15 @@ EN = {
     "set_nothing": "Nothing to set. Example: /day set work_hours=09:00-17:30",
     "set_ok": "ok  {line}",
     "set_refused": "refused  {key}: {why}",
+    "calendar_user_only": "the calendar source is yours to choose, an assistant cannot set it: type /day set "
+                          "calendar=<google, ics:<https URL or file>, file:<json file>, cmd:<program>, or none> "
+                          "yourself",
+    "agent_calendar_user": "For the agent: the calendar source decides which program or address is run or read on "
+                           "every plan, so no tool ever sets it, whatever the value (google, ics:, file:, cmd:, "
+                           "none). Tell the user, in their language and plain words, to type it themselves: "
+                           "/day set calendar=<source> in the chat; to take the Google calendar this profile "
+                           "already has, /day setup auto. Do not retry with another spelling or another tool, and "
+                           "do not run a command to set it yourself.",
     "no_rules_warning": "None of your planning rules are set yet, so defaults are used. Run /day setup.",
     "cal_unreadable": "Calendar unreadable ({why}): the plan ignores your meetings.",
     "add_name": 'Give the task a name: /day add "Write the quote" 45m',
@@ -53,6 +62,9 @@ EN = {
     "dropped": "Dropped #{id} {name}",
     # --- scheduling ------------------------------------------------------------------------------------------
     "need_session": "Scheduling needs a running Hermes session: send /day cron {action} from a chat.",
+    "cron_refused": "Scheduling is refused inside a cron run: a scheduled job may not create or remove scheduled jobs "
+                    "unless cron.allow_agent_scheduling is true in the Hermes config (it is not, or the config could "
+                    "not be read). From a chat, /day cron on and /day cron off work.",
     "jobs_failed": "Hermes did not list its cron jobs, so nothing was changed ({why}).",
     "job_refused": "Hermes refused the {what} job: {why}",
     "scheduled": "Scheduled: a morning brief at {time} on your workdays, and a reminder check every 5 minutes "
@@ -118,7 +130,7 @@ Two commands you type yourself:
     # --- calendar sources ------------------------------------------------------------------------------------
     "no_calendar": "No calendar connected: the plan ignores your meetings. Connect one with "
                    "/day set calendar=google (or ics:<file or URL>), or run /day setup.",
-    "plain_http": "The calendar URL is plain http: anyone on the network can read it",
+    "ics_https_only": "The calendar URL must start with https:// (plain http is refused: anyone on the network could read or alter it)",
     "recurring": "{n} recurring event(s) repeat monthly or yearly; only their first date is read, so later "
                  "repeats are missing from the plan",
     # --- setup -----------------------------------------------------------------------------------------------
@@ -152,11 +164,15 @@ Two commands you type yourself:
     "auto_done": "Adopted from your Hermes profile:",
     "auto_nothing": "Nothing more to adopt: everything found is already set.",
     "auto_skip_cal": "Calendar not adopted: {why}",
+    "auto_cal_user": "Calendar left to you: type /day setup auto yourself to adopt it (an assistant cannot set the "
+                     "calendar source).",
     "agent_hint": "For the agent: before asking the user anything, use what you already know of them (memory, "
                   "profile notes, existing reminders, connected calendar) to propose each answer, then ask only to "
                   "confirm or complete. Speak the user's language, in plain sentences: never show the key=value "
                   "names or any command syntax, and turn loose answers (9h30, from 9 to 7, lunch around 1) into the "
-                  "settings yourself. Save answers with the 'settings' argument.",
+                  "settings yourself. Save answers with the 'settings' argument. The calendar source is the one "
+                  "setting you never save: when the profile shows a ready Google calendar, tell the user to type "
+                  "/day setup auto; for any other source, /day set calendar=<source> (they type it themselves).",
     "unnamed": "(unnamed)",
     "found_google_nosignin": "[!!] Google Calendar: the google-workspace skill is installed but not signed in yet "
                              "(run its own setup first)",
@@ -192,6 +208,9 @@ FR = {
     "set_nothing": "Rien à régler. Exemple : /day set work_hours=09:00-17:30",
     "set_ok": "ok  {line}",
     "set_refused": "refusé  {key} : {why}",
+    "calendar_user_only": "la source d'agenda, c'est toi qui la choisis, un assistant ne peut pas la régler : tape "
+                          "toi-même /day set calendar=<google, ics:<URL https ou fichier>, file:<fichier json>, "
+                          "cmd:<programme>, ou none>",
     "no_rules_warning": "Aucune de tes règles n'est encore réglée : les valeurs par défaut servent. "
                         "Lance /day setup.",
     "cal_unreadable": "Agenda illisible ({why}) : le plan ignore tes réunions.",
@@ -211,6 +230,10 @@ FR = {
     "done_now": "Les estimations « {category} » sont maintenant multipliées par {factor:g} ({count} mesures).",
     "done_msg": "Terminé n°{id} {name} : {actual} min pour une estimation de {est}. {calib}",
     "dropped": "Oublié n°{id} {name}",
+    "cron_refused": "La planification est refusée dans une exécution de cron : une tâche planifiée ne crée ni ne "
+                    "supprime de tâches planifiées, sauf si cron.allow_agent_scheduling vaut true dans la config "
+                    "Hermes (ce n'est pas le cas, ou la config est illisible). Depuis un chat, /day cron on et "
+                    "/day cron off fonctionnent.",
     "need_session": "La planification demande une session Hermes en marche : envoie /day cron {action} depuis une "
                     "conversation.",
     "jobs_failed": "Hermes n'a pas listé ses tâches planifiées, rien n'a été changé ({why}).",
@@ -278,7 +301,7 @@ Deux commandes que tu tapes toi-même :
     "day_full": "La journée est pleine : {names} ne tient pas. Déplace-la, raccourcis-la ou libère du temps.",
     "no_calendar": "Aucun agenda connecté : le plan ignore tes réunions. Connectes-en un avec "
                    "/day set calendar=google (ou ics:<fichier ou URL>), ou lance /day setup.",
-    "plain_http": "L'URL de l'agenda est en http simple : quiconque est sur le réseau peut la lire",
+    "ics_https_only": "L'URL de l'agenda doit commencer par https:// (le http simple est refusé : quiconque est sur le réseau pourrait la lire ou la modifier)",
     "recurring": "{n} événement(s) récurrent(s) se répètent chaque mois ou chaque année ; seule leur première date "
                  "est lue, les répétitions suivantes manquent donc au plan",
     "setup_title": "Réglage de l'agenda guardian - environ 3 minutes, tu pourras tout affiner plus tard",
@@ -312,6 +335,8 @@ Deux commandes que tu tapes toi-même :
     "auto_done": "Repris de ton profil Hermes :",
     "auto_nothing": "Rien de plus à reprendre : tout ce qui a été trouvé est déjà réglé.",
     "auto_skip_cal": "Agenda non repris : {why}",
+    "auto_cal_user": "Agenda laissé à toi : tape toi-même /day setup auto pour le reprendre (un assistant ne peut "
+                     "pas régler la source d'agenda).",
     "unnamed": "(sans nom)",
     "found_google_nosignin": "[!!] Google Agenda : la compétence google-workspace est installée mais pas encore "
                              "connectée (lance d'abord son propre réglage)",

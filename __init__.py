@@ -5,7 +5,8 @@ of any calendar source, inside rules you wrote down yourself. It also fits activ
 the week with reasons drawn from the calendar's history, and writes to a Google calendar only when the user
 typed ``/day write on`` and said yes, removing only what it wrote. It never calls a model: ``/day`` (slash),
 ``hermes guardian`` (CLI) and fifteen tools for the agent share one core. ``/day`` followed by anything but a
-format-free command (write, undo, plan...) is a request in plain words: it goes to the agent, not to the parser.
+format-free command (write, undo, plan...) is a request in plain words: it goes to the agent, not to the parser,
+except ``set ... calendar=...`` and ``setup auto``: the calendar source is the user's alone, no tool sets it.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from typing import Any
 
 from . import commands
 from .core import Guardian, UserError, parse_day, parse_minutes
+from .profile import normal_key
 from .texts import tr
 
 
@@ -136,10 +138,13 @@ def _t_done(g: Guardian, a: dict) -> dict:
 def _t_setup(g: Guardian, a: dict) -> dict:
     settings = a.get("settings") or {}
     if a.get("adopt"):
-        return {"result": g.setup_auto()}
+        return {"result": g.setup_auto(from_tool=True)}
     if not settings:
         return {"questions": g.setup_text(), "found": g.facts(), "for_agent": tr("en", "agent_hint")}
-    return {"result": g.set_rules([(str(k), str(v)) for k, v in settings.items()])}
+    answer = {"result": g.set_rules([(str(k), str(v)) for k, v in settings.items()], from_tool=True)}
+    if any(normal_key(str(k)) == "calendar" for k in settings):  # refused line by line: tell the agent what to do
+        answer["for_agent"] = tr("en", "agent_calendar_user")
+    return answer
 
 
 def _t_schedule(g: Guardian, a: dict) -> dict:
@@ -228,11 +233,12 @@ _TOOLS = [
         "answers, plus what the Hermes profile already shows (time zone, connected calendar, existing reminders): "
         "propose answers from what you know of the user, then ask only to confirm or complete, in their language. "
         "With 'settings' (a map such as {\"work_hours\": \"09:00-17:30\", \"category\": \"admin:20\"}) it saves "
-        "the user's answers; with adopt=true it adopts the calendar, language and time zone the profile already has. "
+        "the user's answers; with adopt=true it adopts the language and time zone the profile already has. The "
+        "calendar source is never set by a tool: it is the user's own choice (see the answer's for_agent line). "
         "Never invent answers.",
         {"adopt": {"type": "boolean"}, "settings": {"type": "object", "additionalProperties": _S,
                       "description": "rule name to value; keys: work_hours, workdays, protected, focus, "
-                                     "max_block_min, break_min, buffer_min, max_tasks_per_day, calendar, "
+                                     "max_block_min, break_min, buffer_min, max_tasks_per_day, "
                                      "category (name:minutes), language, timezone"}})),
     ("day_add_task", _t_add, _schema(
         "day_add_task", "Add a task with the USER's own time estimate in minutes (ask for it; the planner learns "

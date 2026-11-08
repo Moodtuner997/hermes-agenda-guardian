@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+import http.client
+import ipaddress
 import json
+import os
 import re
+import socket
+import ssl
 import subprocess
 import sys
+import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
@@ -219,9 +226,23 @@ def parse_ics(text: str, day: date, tzname: str = "", warnings: list[str] | None
 
 # --- fetching --------------------------------------------------------------------------------------------
 
-def _run_json(argv: list[str], run) -> object:
+_CHILD_ENV = ("PATH", "HOME", "LANG", "TZ")
+_CHILD_ENV_WINDOWS = ("SYSTEMROOT", "TEMP", "TMP", "USERPROFILE", "PATHEXT", "COMSPEC")  # no sockets without SYSTEMROOT
+
+
+def _child_env(home: Path, environ=None, windows: bool | None = None) -> dict[str, str]:
+    """What a calendar program starts with: the basics it needs to run and the profile folder, nothing else. The
+    parent holds every provider key of Hermes; a program the user (or the Google skill) names has no use for them."""
+    environ = os.environ if environ is None else environ
+    keep = _CHILD_ENV + (_CHILD_ENV_WINDOWS if (os.name == "nt" if windows is None else windows) else ())
+    env = {key: value for key, value in environ.items() if key in keep or key.startswith("LC_")}
+    env["HERMES_HOME"] = str(home)
+    return env
+
+
+def _run_json(argv: list[str], run, home: Path) -> object:
     try:
-        done = run(argv, capture_output=True, text=True, timeout=TIMEOUT, shell=False)
+        done = run(argv, capture_output=True, text=True, timeout=TIMEOUT, shell=False, env=_child_env(home))
     except FileNotFoundError:
         raise SourceError(f"calendar program not found: {argv[0]}")
     except subprocess.TimeoutExpired:
@@ -235,8 +256,120 @@ def _run_json(argv: list[str], run) -> object:
         raise SourceError("calendar program did not print JSON")
 
 
+# --- an ICS address: https only, every address checked, the connection made to the checked address ------------
+
+_NEVER_PUBLIC = [ipaddress.ip_network(net) for net in (
+    "100.64.0.0/10",                      # carrier-grade NAT: where tailnet addresses live
+    "192.0.0.0/24", "198.18.0.0/15",
+    "::/96",                              # IPv4-compatible addresses
+    "64:ff9b::/96", "64:ff9b:1::/48",     # NAT64: reaches IPv4 addresses this check never sees
+    "2002::/16", "2001::/32")]            # 6to4 and Teredo, the same
+
+
+def is_public(address: str) -> bool:
+    """A globally routable address only: not loopback, private, link-local (169.254.169.254 is the cloud metadata
+    service), CGNAT, reserved, multicast or unspecified. ``::ffff:a.b.c.d`` is judged as the IPv4 address it wraps."""
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        return False
+    if ip.version == 6 and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    if any(ip in net for net in _NEVER_PUBLIC if net.version == ip.version):
+        return False
+    return ip.is_global and not (ip.is_multicast or ip.is_private or ip.is_loopback or ip.is_link_local
+                                 or ip.is_reserved or ip.is_unspecified)
+
+
+def verified_addresses(host: str, port: int, getaddrinfo=socket.getaddrinfo) -> list[str]:
+    """The addresses ``host`` resolves to, only when every one is public: a name that also answers with a private
+    address could be steered there. Numeric forms (2130706433, 0x7f.1) are caught the same way, since the resolved
+    address is tested, not the text. Raises URLError."""
+    try:
+        found = getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except OSError as exc:
+        raise urllib.error.URLError(f"cannot resolve {host}: {exc}")
+    addresses = list(dict.fromkeys(info[4][0] for info in found))
+    if not addresses:
+        raise urllib.error.URLError(f"{host} has no address")
+    for address in addresses:
+        if not is_public(address):
+            raise urllib.error.URLError(f"{host} resolves to {address}, which is not a public address: refused")
+    return addresses
+
+
+class _CheckedConnection(http.client.HTTPSConnection):
+    """HTTPS to an address that was checked, the host name kept for SNI and the certificate: nothing is resolved
+    again between the check and the connection, so a DNS answer that changes in between (rebinding) changes nothing."""
+
+    def __init__(self, host, *, addresses, context, **kw):
+        super().__init__(host, context=context, **kw)
+        self._addresses, self._tls = addresses, context
+
+    def connect(self):
+        failure = None
+        for address in self._addresses:
+            try:
+                sock = socket.create_connection((address, self.port), self.timeout, self.source_address)
+                break
+            except OSError as exc:
+                failure = exc
+        else:
+            raise failure
+        try:
+            self.sock = self._tls.wrap_socket(sock, server_hostname=self.host)
+        except BaseException:
+            sock.close()
+            raise
+
+
+class _CheckedHTTPS(urllib.request.HTTPSHandler):
+    """Resolves and checks the host of every request it opens, the first one and each redirected one."""
+
+    def __init__(self, getaddrinfo=socket.getaddrinfo):
+        super().__init__(context=ssl.create_default_context())
+        self._getaddrinfo = getaddrinfo
+
+    def https_open(self, req):
+        parts = urllib.parse.urlsplit(req.full_url)
+        addresses = verified_addresses(parts.hostname or "", parts.port or 443, self._getaddrinfo)
+        return self.do_open(lambda host, **kw: _CheckedConnection(host, addresses=addresses, context=self._context, **kw),
+                            req)
+
+
+class _SameHostRedirect(urllib.request.HTTPRedirectHandler):
+    """A calendar server may send us to another path of itself, never to another host, port or scheme."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        old = urllib.parse.urlsplit(req.full_url)
+        new = urllib.parse.urlsplit(newurl)  # already joined to the old address by urllib
+        if (new.scheme != "https" or (new.hostname or "").lower() != (old.hostname or "").lower()
+                or (new.port or 443) != (old.port or 443)):
+            raise urllib.error.URLError(f"redirect to {new.scheme}://{new.netloc} refused: only the same https host may answer")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def build_opener(getaddrinfo=socket.getaddrinfo, https=_CheckedHTTPS) -> urllib.request.OpenerDirector:
+    """Built by hand: no proxy (a proxy would be the host to check, and the connection must go to the address checked
+    here), no plain http, no file or ftp handler."""
+    opener = urllib.request.OpenerDirector()
+    for handler in (urllib.request.UnknownHandler(), urllib.request.HTTPDefaultErrorHandler(), _SameHostRedirect(),
+                    urllib.request.HTTPErrorProcessor(), https(getaddrinfo)):
+        opener.add_handler(handler)
+    return opener
+
+
+def safe_urlopen(request, timeout=TIMEOUT, getaddrinfo=socket.getaddrinfo):
+    """The default way to read an ICS address (``urlopen`` stays injectable for tests and for callers)."""
+    return build_opener(getaddrinfo).open(request, timeout=timeout)
+
+
+def is_url(location: str) -> bool:
+    return location.lower().startswith(("http://", "https://"))
+
+
 def fetch_events(profile: dict, day: date, home: Path, *, run=subprocess.run,
-                 urlopen=urllib.request.urlopen) -> tuple[list[Event], list[str]]:
+                 urlopen=safe_urlopen) -> tuple[list[Event], list[str]]:
     """Events touching ``day`` and warnings. Raises SourceError when the source is configured but unreadable."""
     return fetch_range(profile, day, day, home, run=run, urlopen=urlopen)
 
@@ -254,7 +387,7 @@ def iso_utc(moment: datetime, tzname: str) -> str:
 
 
 def fetch_range(profile: dict, first: date, last: date, home: Path, *, run=subprocess.run,
-                urlopen=urllib.request.urlopen) -> tuple[list[Event], list[str]]:
+                urlopen=safe_urlopen) -> tuple[list[Event], list[str]]:
     """Events touching the days ``first``..``last`` (both included) and warnings. A single day keeps the
     original request (100 events); a longer range asks for up to 500 and warns when the answer was cut."""
     source = profile.get("calendar") or {"type": "none"}
@@ -271,7 +404,7 @@ def fetch_range(profile: dict, first: date, last: date, home: Path, *, run=subpr
             argv = google_argv(home, "calendar", "list", "--start", start_iso, "--end", end_iso, "--max", str(limit))
         else:
             argv = [a.replace("{start}", start_iso).replace("{end}", end_iso) for a in source["argv"]]
-        data = _run_json(argv, run)
+        data = _run_json(argv, run, home)
         events = _json_events(data, tzname)
         if kind == "google" and isinstance(data, list) and len(data) >= limit and first != last:
             warnings.append(tr(lang, "range_cut", n=limit))
@@ -283,9 +416,9 @@ def fetch_range(profile: dict, first: date, last: date, home: Path, *, run=subpr
     elif kind == "ics":
         location = source["path"]
         try:
-            if location.startswith(("http://", "https://")):
-                if location.startswith("http://"):
-                    warnings.append(tr(lang, "plain_http"))
+            if is_url(location):
+                if not location.lower().startswith("https://"):
+                    raise SourceError(tr(lang, "ics_https_only"))
                 request = urllib.request.Request(location, headers={"User-Agent": "hermes-agenda-guardian"})
                 with urlopen(request, timeout=TIMEOUT) as response:
                     text = response.read().decode("utf-8", "replace")

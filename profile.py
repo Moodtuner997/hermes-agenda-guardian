@@ -100,7 +100,9 @@ def _calendar(text: str, lang: str = "en") -> dict:
         return {"type": "google"}
     kind, _, rest = text.partition(":")
     if kind in ("ics", "file") and rest:
-        if not rest.startswith(("http://", "https://")):
+        if kind == "ics" and rest.lower().startswith("http://"):
+            raise ValueError(tr(lang, "ics_https_only"))
+        if not rest.lower().startswith(("http://", "https://")):
             # A cron script or the gateway does not run in the folder the rule was typed in.
             rest = str(Path(rest).expanduser().resolve())
         return {"type": kind, "path": rest}
@@ -113,11 +115,20 @@ def _calendar(text: str, lang: str = "en") -> dict:
     raise ValueError(tr(lang, "bad_calendar"))
 
 
-def apply_setting(profile: dict, key: str, value: str, today: date) -> str:
-    """Set one rule from text; returns a confirmation line. Raises ValueError on bad input."""
-    key = key.strip().lower().replace("-", "_")
+def normal_key(key: str) -> str:
+    """The name a setting is stored under, however the key was typed (case, dashes, outer spaces)."""
+    return key.strip().lower().replace("-", "_")
+
+
+def apply_setting(profile: dict, key: str, value: str, today: date, *, from_tool: bool = False) -> str:
+    """Set one rule from text; returns a confirmation line. Raises ValueError on bad input.
+    ``from_tool``: the call comes from an agent tool, so the calendar source (which names a program or an address
+    that is run or read on every plan) stays the user's own: only their typed command may set it."""
+    key = normal_key(key)
     value = value.strip()
     lang = profile.get("language", "en")
+    if from_tool and key == "calendar":
+        raise ValueError(tr(lang, "calendar_user_only"))
     if key == "language":
         if value not in ("en", "fr"):
             raise ValueError(tr(lang, "language_values"))

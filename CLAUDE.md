@@ -21,7 +21,16 @@ ni un agenda particulier.
 - Un seul chemin d'écriture : tout ce qui s'écrit passe par une proposition (`day_propose`, `day_week_plan` ou
   `day_stage`, un plan composé par l'agent) puis `day_confirm`. La consigne système interdit tout autre outil
   d'agenda ; le plugin ne peut pas le bloquer (voir Pièges).
-- Chaque modification passe `python -m pytest tests -q` (107 tests), `hermes plugins validate .`, puis, si le cron,
+- Seul l'utilisateur fixe la source d'agenda (`calendar`) : aucun outil ne la pose, `google` et `none` compris
+  (`apply_setting(..., from_tool=True)` refuse, `setup_auto(from_tool=True)` laisse l'agenda). `/day set … calendar=…` et
+  `/day setup auto` tapés sont traités par le répartiteur (`commands.sets_calendar`), jamais réécrits pour l'agent.
+- Le programme d'agenda (script Google ou `cmd:`) démarre avec `sources._child_env` (PATH, HOME, locale, TZ,
+  HERMES_HOME, plus le minimum Windows) : jamais une clé de fournisseur ni une variable de proxy.
+- ICS par URL : `https` seul, toute adresse résolue publique, connexion à l'adresse vérifiée, redirection vers le même
+  hôte seulement, ni proxy ni http (`sources.safe_urlopen`, défaut de `fetch_*` et de `Guardian`).
+- `day_schedule` on/off est refusé dans une session de cron tant que `cron.allow_agent_scheduling` n'est pas vrai
+  (config illisible = refus ; `status` reste permis).
+- Chaque modification passe `python -m pytest tests -q` (275 tests), `hermes plugins validate .`, puis, si le cron,
   le tableau de bord, un outil ou le hook bougent, `tests/e2e_hermes.py` avec l'interpréteur de Hermes (dans un
   `HERMES_HOME` jetable : un dossier avec `config.yaml` qui active le plugin et une copie du plugin).
 - README, PR et textes publics en anglais ; commits en français, format conventionnel.
@@ -71,6 +80,13 @@ ni un agenda particulier.
   syntaxe, proposer un chiffre manquant et le dire, déplacer = `day_undo` puis replanifier).
 - Les textes que l'agent relaie ne portent plus de syntaxe (`/day ok N`, `real=2h`, `/day kind ...`) : un test
   vérifie l'aide courte ; en ajouter un si un nouveau texte affiché cite une commande.
+- Revue de Teknium (PR 149965, 8/11) : les quatre correctifs de la 0.5.1 sont codés, chacun avec un cas mauvais et un
+  cas bon. Mesuré sur Windows : sans `SYSTEMROOT` un Python enfant n'obtient plus de résolution de noms
+  (`getaddrinfo failed`), d'où la liste Windows de `_child_env` ; `is_public` donne le même verdict sur Python 3.13.5 et
+  sur celui de Hermes (3.14.9) pour 39 adresses refusées et 12 acceptées ; l'ouvreur durci lit `https://www.python.org/`
+  et refuse localhost, 127.0.0.1, http et une redirection vers un autre hôte (`https://www.github.com/`). `example.com`
+  échoue sur ce poste (« unable to get local issuer certificate », même avec `urlopen` simple) : sonde réelle sur
+  python.org.
 - Non prouvé : la 0.5.0 sur Telegram (crochet sur une vraie passerelle, agent qui appelle `day_week_plan` avec un
   chiffre supposé au lieu de questionner ou d'écrire à la main), question de durée envoyée par le cron, livraison
   Telegram/WhatsApp, macOS.

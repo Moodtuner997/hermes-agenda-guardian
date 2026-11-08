@@ -5,7 +5,8 @@ of any calendar source, inside rules you wrote down yourself. It also fits activ
 the week with reasons drawn from the calendar's history, and writes to a Google calendar only when the user
 typed ``/day write on`` and said yes, removing only what it wrote. It never calls a model: ``/day`` (slash),
 ``hermes guardian`` (CLI) and fifteen tools for the agent share one core. ``/day`` followed by anything but a
-format-free command (write, undo, plan...) is a request in plain words: it goes to the agent, not to the parser.
+format-free command (write, undo, plan...) is a request in plain words: it goes to the agent, not to the parser,
+except ``set ... calendar=...`` and ``setup auto``: the calendar source is the user's alone, no tool sets it.
 """
 
 from __future__ import annotations

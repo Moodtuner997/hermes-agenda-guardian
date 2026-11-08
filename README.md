@@ -177,12 +177,28 @@ What it will and will not do:
 | Value | Reads |
 | --- | --- |
 | `google` | the Google Workspace skill's script (`calendar list`), with your existing Google login |
-| `ics:<path or https URL>` | an ICS file or the secret ICS address of a calendar (Outlook, Google, Apple) |
+| `ics:<path or https URL>` | an ICS file or the secret `https://` ICS address of a calendar (Outlook, Google, Apple) |
 | `file:<path>` | a JSON file: a list of `{summary, start, end}` (the shape the Google script prints) |
 | `cmd:<program and arguments>` | any program that prints that JSON; `{start}` and `{end}` are replaced by the day's UTC bounds; run without a shell |
 | `none` | nothing; the plan says it ignores your meetings |
 
 If the source cannot be read, the plan carries a visible warning instead of silently assuming an empty day.
+
+**Only you set the calendar source.** It names a program or an address that is run or read on every plan, so no
+agent tool can set it (`day_setup` refuses a `calendar` setting in any spelling, `google` and `none` included, applies
+the other settings of the call and tells the agent to ask you). You set it by typing `/day set calendar=...` in the
+chat (the plugin answers that command itself, it never goes through the agent), or `hermes guardian set calendar=...`
+in a terminal; `/day setup auto` adopts a working Google calendar the same way.
+
+- **ICS over the network:** `https://` only. The host is resolved and every address it answers with must be public
+  (loopback, private, link-local including the cloud metadata address, carrier-grade NAT and reserved ranges are
+  refused); the connection goes to the address that was checked, with the host name kept for the certificate. A
+  redirect to another host, port or scheme is refused, and every hop is checked again. No proxy is used. A local
+  `ics:<path>` file is read as is.
+- **Calendar programs** (`google` and `cmd:`) start with `PATH`, `HOME`, the locale (`LANG`, `LC_*`), `TZ` and
+  `HERMES_HOME` (plus `SYSTEMROOT`, `TEMP`, `TMP`, `USERPROFILE`, `PATHEXT` and `COMSPEC` on Windows), and nothing
+  else: none of the provider keys Hermes holds, no proxy variable. A `cmd:` program that needs another variable must
+  read it from its own configuration.
 
 ICS recurrence: `DAILY` and `WEEKLY` (with `INTERVAL`, `BYDAY`, `COUNT`, `UNTIL`, `EXDATE`) are expanded;
 `MONTHLY` and `YEARLY` repeats are flagged in the plan, not guessed. Moved single occurrences of a recurring
@@ -220,13 +236,16 @@ answer a proposal, and a written block has **Take it back**. **Write it** stays 
 read-only: they only propose), `day_confirm`, `day_undo`, `day_took` and `day_week` (read-only). The setup tool hands the agent
 what the profile already shows (time zone, calendar, other reminders) so it proposes your answers from what it
 knows of you and asks only to confirm or complete, in your language. It never invents them. `day_confirm`
-refuses unless you turned writing on yourself, and no tool can turn it on.
+refuses unless you turned writing on yourself, and no tool can turn it on; no tool can set the calendar source
+either. `day_schedule` `on` and `off` are refused in a cron run unless `cron.allow_agent_scheduling` is true in the
+Hermes config (the rule Hermes applies to its own `cronjob` tools; an unreadable config counts as refused), and
+`status` always works.
 
 ## Disclosure
 
 - **Network:** none by default. With `calendar=ics:https://...` it fetches that URL (a secret address: treat it
-  like a password; `http://` is flagged in the plan). With `calendar=google` or `calendar=cmd:` it runs the
-  program you chose, which has its own network access.
+  like a password) under the rules above: `https` only, public addresses only, same-host redirects only, no proxy.
+  With `calendar=google` or `calendar=cmd:` it runs the program you chose, which has its own network access.
 - **Reads outside the plugin's own data:** the calendar source you configure (event titles, times, status).
   For onboarding only: the `timezone` and `language` lines of `HERMES_HOME/config.yaml`, whether the Google
   Workspace skill and its `google_token.json` exist (the token is never opened) and the name and schedule of the
@@ -239,9 +258,10 @@ refuses unless you turned writing on yourself, and no tool can turn it on.
   `[agenda-guardian:<session>:<part>]`, created and removed through the Google Workspace skill's script
   (`calendar create` / `calendar delete`) on your primary calendar. It never edits an existing event and deletes
   only events it recorded and still recognises. `/day write off` stops it.
-- **Shell commands:** only the calendar program you configure (`google` or `cmd:`), run without a shell, with a
-  25 second timeout; with `google`, also that script's `calendar create` and `calendar delete` for the writes
-  above. The generated scripts run the plugin's own code.
+- **Shell commands:** only the calendar program you configure (`google` or `cmd:`), set by you and never by a
+  tool, run without a shell, with a minimal environment (see Calendar sources) and a 25 second timeout; with
+  `google`, also that script's `calendar create` and `calendar delete` for the writes above. The generated scripts
+  run the plugin's own code.
 - **Background processes, stored credentials, telemetry:** none. It stores no credential.
 - **Model calls:** none. Reminder and brief jobs are `no_agent` jobs.
 - **Dashboard:** `GET /plan`, `GET /week`, `POST /tasks`, `POST /tasks/<id>/done`, `POST /proposals/<id>/ok`,
@@ -250,7 +270,8 @@ refuses unless you turned writing on yourself, and no tool can turn it on.
 - **System prompt:** one short section (rules for the agent, about 1,700 characters, in your language).
 - **Hook:** one, `pre_gateway_dispatch`. It looks at the text of each incoming chat message and acts on one
   case only: a message that starts with `/day` followed by anything other than a format-free command (`help`,
-  `plan`, `now`, `list`, `brief`, `ok`, `undo`, `write`, `cron`). That message is rewritten
+  `plan`, `now`, `list`, `brief`, `ok`, `undo`, `write`, `cron`), or `set` with a `calendar=` pair, or `setup auto`
+  (those two are answered by the plugin itself, see Calendar sources). That message is rewritten
   into an ordinary request for the agent, prefixed with a pointer to the plugin's tools. It reads nothing else,
   stores nothing and never drops a message; on any error it does nothing.
 - **Approvals:** the plugin touches no tool call. `day_schedule on` goes through the registry's `cronjob_manage`
@@ -286,12 +307,15 @@ refuses unless you turned writing on yourself, and no tool can turn it on.
 - A `/day ...` typed while the agent is still answering is queued by Hermes and reaches the agent as plain text,
   not the plugin (seen once: the agent answered that `/day write` did not exist and wrote the events itself). Type
   `/day write on` when the chat is idle; the system prompt tells the agent it cannot do it for you.
+- The ICS fetch ignores proxy settings (the connection must go to the address that was checked), and a calendar
+  program receives no environment variable beyond the list above, so the Google skill's own `HERMES_GWS_BIN` is not
+  passed: put `gws` on `PATH`.
 - One calendar, one person. Not a team scheduler.
 
 ## Development
 
 ```
-python -m pytest tests -q                  # 107 tests, no Hermes needed
+python -m pytest tests -q                  # 275 tests, no Hermes needed
 hermes plugins validate .
 HERMES_HOME=<home> <hermes python> tests/e2e_hermes.py     # real tool calls, real cron, no model
 python tests/make_demo_profile.py --home <home>             # an invented day for screenshots

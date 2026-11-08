@@ -176,7 +176,7 @@ What it will and will not do:
 
 | Value | Reads |
 | --- | --- |
-| `google` | the Google Workspace skill's script (`calendar list`), with your existing Google login |
+| `google` | the Google Workspace skill's script (`calendar list`), with your existing Google login; it runs on the Python of the environment that holds the skill's libraries (under a managed Hermes 0.23, the dependency environment's own `python`, since 0.5.4; if that Python cannot start, the running one is tried once) |
 | `ics:<path or https URL>` | an ICS file or the secret `https://` ICS address of a calendar (Outlook, Google, Apple) |
 | `file:<path>` | a JSON file: a list of `{summary, start, end}` (the shape the Google script prints) |
 | `cmd:<program and arguments>` | any program that prints that JSON; `{start}` and `{end}` are replaced by the day's UTC bounds; run without a shell |
@@ -322,7 +322,9 @@ Hermes config (the rule Hermes applies to its own `cronjob` tools; an unreadable
 - The Google source and the writes are tested against the skill script's argv and output format with an
   in-memory stand-in (it records every call, so the tests prove which events were and were not touched), not
   against a real Google account in this repository's test suite. The skill script has no "update" call: moving a
-  session means taking it back and proposing again.
+  session means taking it back and proposing again. The choice of the interpreter that runs it is tested with two real
+  interpreters and a stand-in library, not against a managed Hermes 0.23 in CI (the end-to-end run uses a plain
+  virtual environment, where `sys.executable` already sees the libraries).
 - The reasons come from counting (which windows were taken, how heavy a weekday usually is); there is no model
   judging your habits, so a habit that does not repeat on the same weekday is not seen. Recurring events are
   read as the calendar expands them.
@@ -345,7 +347,7 @@ Hermes config (the rule Hermes applies to its own `cronjob` tools; an unreadable
 ## Development
 
 ```
-python -m pytest tests -q                  # 427 tests, no Hermes needed
+python -m pytest tests -q                  # 450 tests, no Hermes needed
 hermes plugins validate .
 HERMES_HOME=<home> <hermes python> tests/e2e_hermes.py     # real tool calls, real cron, no model
 python tests/make_demo_profile.py --home <home>             # an invented day for screenshots

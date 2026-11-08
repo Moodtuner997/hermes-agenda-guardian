@@ -27,19 +27,19 @@ def marker(group: int, part: str) -> str:
 def create(home: Path, tzname: str, calendar_id: str, summary: str, start: datetime, end: datetime,
            description: str, run=subprocess.run) -> tuple[str, str]:
     """One event on the Google calendar: (event id, link). Raises ``sources.SourceError``."""
-    argv = sources.google_argv(
+    data = sources.run_google(
         home, "calendar", "create", "--summary", summary, "--start", sources._aware(start, tzname).isoformat(),
-        "--end", sources._aware(end, tzname).isoformat(), "--description", description, "--calendar", calendar_id)
-    data = sources._run_json(argv, run, home)
+        "--end", sources._aware(end, tzname).isoformat(), "--description", description, "--calendar", calendar_id,
+        run=run)
     if not isinstance(data, dict) or not data.get("id"):
         raise sources.SourceError("the calendar did not return an event id")
     return str(data["id"]), str(data.get("htmlLink", ""))
 
 
 def _live(home: Path, tzname: str, calendar_id: str, day_start: datetime, day_end: datetime, run) -> dict[str, dict]:
-    argv = sources.google_argv(home, "calendar", "list", "--start", sources.iso_utc(day_start, tzname),
-                               "--end", sources.iso_utc(day_end, tzname), "--max", "100", "--calendar", calendar_id)
-    data = sources._run_json(argv, run, home)
+    data = sources.run_google(home, "calendar", "list", "--start", sources.iso_utc(day_start, tzname),
+                              "--end", sources.iso_utc(day_end, tzname), "--max", "100", "--calendar", calendar_id,
+                              run=run)
     return {str(e.get("id")): e for e in data if isinstance(e, dict)} if isinstance(data, list) else {}
 
 
@@ -59,7 +59,6 @@ def remove(conn, home: Path, tzname: str, event_id: str, now: datetime, run=subp
     if marker(row["group_id"], row["part"]) not in str(found.get("description", "")):
         store.mark_removed(conn, event_id, "rewritten", now)
         return "rewritten"
-    argv = sources.google_argv(home, "calendar", "delete", event_id, "--calendar", row["calendar_id"])
-    sources._run_json(argv, run, home)
+    sources.run_google(home, "calendar", "delete", event_id, "--calendar", row["calendar_id"], run=run)
     store.mark_removed(conn, event_id, "deleted", now)
     return "deleted"

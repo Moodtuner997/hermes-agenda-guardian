@@ -62,6 +62,9 @@ EN = {
     "dropped": "Dropped #{id} {name}",
     # --- scheduling ------------------------------------------------------------------------------------------
     "need_session": "Scheduling needs a running Hermes session: send /day cron {action} from a chat.",
+    "cron_refused": "Scheduling is refused inside a cron run: a scheduled job may not create or remove scheduled jobs "
+                    "unless cron.allow_agent_scheduling is true in the Hermes config (it is not, or the config could "
+                    "not be read). From a chat, /day cron on and /day cron off work.",
     "jobs_failed": "Hermes did not list its cron jobs, so nothing was changed ({why}).",
     "job_refused": "Hermes refused the {what} job: {why}",
     "scheduled": "Scheduled: a morning brief at {time} on your workdays, and a reminder check every 5 minutes "
@@ -227,6 +230,10 @@ FR = {
     "done_now": "Les estimations « {category} » sont maintenant multipliées par {factor:g} ({count} mesures).",
     "done_msg": "Terminé n°{id} {name} : {actual} min pour une estimation de {est}. {calib}",
     "dropped": "Oublié n°{id} {name}",
+    "cron_refused": "La planification est refusée dans une exécution de cron : une tâche planifiée ne crée ni ne "
+                    "supprime de tâches planifiées, sauf si cron.allow_agent_scheduling vaut true dans la config "
+                    "Hermes (ce n'est pas le cas, ou la config est illisible). Depuis un chat, /day cron on et "
+                    "/day cron off fonctionnent.",
     "need_session": "La planification demande une session Hermes en marche : envoie /day cron {action} depuis une "
                     "conversation.",
     "jobs_failed": "Hermes n'a pas listé ses tâches planifiées, rien n'a été changé ({why}).",

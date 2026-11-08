@@ -48,6 +48,12 @@ def no_ambient_language(monkeypatch):
     monkeypatch.setattr(sys.modules["agenda_guardian.discover"], "_windows_ui_language", lambda: "")
 
 
+@pytest.fixture(autouse=True)
+def no_ambient_cron(monkeypatch):
+    """A test run from inside a cron job must not look like a cron session to the scheduling guard."""
+    monkeypatch.delenv("HERMES_CRON_SESSION", raising=False)
+
+
 @pytest.fixture
 def profile():
     return prof.new_profile()

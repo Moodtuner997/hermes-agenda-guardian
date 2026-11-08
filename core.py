@@ -4,6 +4,7 @@ the CLI command and the model tools alike."""
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import urllib.request
@@ -35,6 +36,29 @@ if text:
 
 _WEEKDAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6,
              "lun": 0, "mar": 1, "mer": 2, "jeu": 3, "ven": 4, "sam": 5, "dim": 6}
+
+
+def in_cron_session() -> bool:
+    """Is this call made by an agent a cron job started? The same test as Hermes (agent/lsp/workspace.py): the session
+    variable wins over the process environment, because the plugin shares the gateway's process and a value left in
+    ``os.environ`` by another run must not make a user's own chat look like a cron run."""
+    try:
+        from gateway.session_context import get_session_env
+
+        value = get_session_env("HERMES_CRON_SESSION", "")
+    except Exception:
+        value = os.environ.get("HERMES_CRON_SESSION", "")
+    return str(value).strip().lower() in ("1", "true", "yes", "on")
+
+
+def cron_scheduling_allowed() -> bool:
+    """``cron.allow_agent_scheduling`` as Hermes reads it (cron/scheduler.py). Unreadable means refused."""
+    try:
+        from hermes_cli.config import load_config
+
+        return bool(((load_config() or {}).get("cron") or {}).get("allow_agent_scheduling"))
+    except Exception:
+        return False
 
 
 def parse_minutes(text: str, lang: str = "en") -> int:
@@ -338,7 +362,14 @@ class Guardian(AgendaMixin):
         return {j["name"]: j.get("job_id") or j.get("id") for j in jobs
                 if isinstance(j, dict) and j.get("name") in (JOB_BRIEF, JOB_NUDGE) and (j.get("job_id") or j.get("id"))}
 
+    def _refuse_in_cron(self) -> None:
+        """Hermes keeps the cronjob toolset from a cron-spawned agent unless cron.allow_agent_scheduling is true; a
+        plugin tool reaches the same registry from the side, so it keeps the same rule. Cheap test first."""
+        if in_cron_session() and not cron_scheduling_allowed():
+            raise UserError(tr(self.lang(), "cron_refused"))
+
     def schedule(self, at_time: str = "", deliver: str = "") -> str:
+        self._refuse_in_cron()
         if self._cron is None:
             raise UserError(tr(self.lang(), "need_session", action="on"))
         profile = self.profile()
@@ -374,6 +405,7 @@ class Guardian(AgendaMixin):
         return tr(profile["language"], "scheduled", time=f"{h:02d}:{m:02d}", scripts=scripts)
 
     def unschedule(self) -> str:
+        self._refuse_in_cron()
         if self._cron is None:
             raise UserError(tr(self.lang(), "need_session", action="off"))
         jobs = self._jobs()

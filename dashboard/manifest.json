@@ -3,7 +3,7 @@
   "label": "Today",
   "description": "Your day and your week: tasks and activities placed around your meetings, each with the reason it is there.",
   "icon": "Calendar",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "tab": {
     "path": "/day",
     "position": "after:analytics"

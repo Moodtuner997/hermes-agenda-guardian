@@ -36,6 +36,7 @@ _CLI = re.compile(r"\b(?:hermes[\w.]{0,40}+|main\.py)\b[^;&|]{0,200}?\bguardian\
 _CODE = re.compile(r"\b(?:apply_setting|set_rules|save_profile|setup_auto)\b|agenda_guardian", re.I)
 _HOME = re.compile(r"(?:(?<![\w-])(?:plugin-data|plugins|scripts)[\s/]{1,8}agenda[-_]guardian|guardian\.db)", re.I)
 _CONT = re.compile(r"[\\^`]\r?\n\s*")  # a line continuation: bash \, cmd ^, PowerShell `
+_ESCAPE = re.compile(r"[\\^](?=\S)")  # bash \ and cmd.exe ^ before a character are dropped: calendar\=x is calendar=x
 _SHELL = re.compile(r"[\"'`]")  # a shell strips quotes: 'calendar'=x is calendar=x
 _LISTS = re.compile(r"[,\[\]()]")  # a python argv list reads like a command line once these are gone
 _ARGV = re.compile(r"[\"'`,\[\]()]")  # the same, for quotes that separate words
@@ -46,10 +47,15 @@ def _squash(text: str) -> str:
     return " ".join(text.split())
 
 
-def readings(raw: str) -> tuple[str, str]:
-    """The text as a shell reads it, then as a python argv list reads it; paths use forward slashes."""
-    flat = _CONT.sub(" ", raw).replace("\\", "/")
-    return _squash(_LISTS.sub(" ", _SHELL.sub("", flat))), _squash(_ARGV.sub(" ", flat))
+def readings(raw: str) -> list[str]:
+    """The text as a shell reads it, as a python argv list reads it, and, when it has a one-character escape, with
+    the escapes dropped (an added reading: ``plugins\\agenda-guardian`` must stay readable as a Windows path)."""
+    joined = _CONT.sub(" ", raw)
+    flat = joined.replace("\\", "/")
+    found = [_squash(_LISTS.sub(" ", _SHELL.sub("", flat))), _squash(_ARGV.sub(" ", flat))]
+    if _ESCAPE.search(joined):
+        found.append(_squash(_LISTS.sub(" ", _SHELL.sub("", _ESCAPE.sub("", joined)))))
+    return found
 
 
 def scan(plain: str) -> tuple[str, list[tuple[int, int]]] | None:

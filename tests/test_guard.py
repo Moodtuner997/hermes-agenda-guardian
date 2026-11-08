@@ -41,6 +41,15 @@ ROUTES = [  # (tool, arguments, route)
     ("terminal", {"command": "hermes guardian ^\n set calendar=cmd:x"}, "calendar"),
     ("terminal", {"command": "hermes guardian setup \\\n auto"}, "calendar"),
     ("write_file", {"path": f"{HOME}/scripts/agenda-guardian-nudge.py", "content": "print(1)"}, "storage"),
+    # a one-character escape the shell drops: bash \, cmd.exe ^ (ticket 8)
+    ("terminal", {"command": r"hermes guardian set calendar\=cmd:x"}, "calendar"),
+    ("terminal", {"command": "hermes guardian set calendar^=cmd:x"}, "calendar"),
+    ("terminal", {"command": r"hermes guardian s\et calendar=cmd:x"}, "calendar"),
+    ("terminal", {"command": r"hermes g\uardian set \calendar=cmd:x"}, "calendar"),
+    ("terminal", {"command": r"hermes guardian set 'calendar'\=cmd:x"}, "calendar"),
+    ("terminal", {"command": r"hermes guardian setup au\to"}, "calendar"),
+    ("terminal", {"command": r"ls plugin\-data/agenda-guardian"}, "storage"),
+    ("terminal", {"command": r"cat plugins/agenda\-guardian/README.md"}, "storage"),
 ]
 THROUGH = [
     ("terminal", {"command": "hermes guardian plan"}),
@@ -64,6 +73,11 @@ THROUGH = [
     ("execute_code", {"code": "firewall.set_rules(rules)"}),
     ("terminal", {"command": r"cd C:\src\hermes-plugins\agenda-guardian && git status"}),
     ("terminal", {"command": "git status", "workdir": "/home/me/hermes-plugins/agenda-guardian"}),
+    # an escape that is not in front of the calendar key does not make a road
+    ("terminal", {"command": r"hermes guardian set work_hours=09:00-17:00 buffer_min\=5"}),
+    ("terminal", {"command": "hermes guardian set work_hours^=09:00-17:00"}),
+    ("terminal", {"command": r"cd C:\src\hermes-plugins\agenda-guardian\tests && dir"}),
+    ("terminal", {"command": r"echo 5^2 and a\=b"}),
 ]
 
 
@@ -150,6 +164,8 @@ LONG = {  # about 260 KB each
     "guardian-then-hermes": "guardian " + "hermes " * 35000, "guardian-then-dots": "guardian " + "hermes." * 35000,
     "road-at-the-end": "hermes " * 20000 + "hermes guardian set calendar=cmd:x", "plugins-words": "plugins/" * 30000,
     "plugins-slashes": "plugins" + "/" * 200000,
+    "escapes": "\\^" * 130000, "escaped-words": "hermes\\ guardian\\ " * 14000,
+    "escaped-road-at-the-end": "\\^hermes " * 16000 + "hermes guardian set calendar\\=cmd:x",
 }
 
 
@@ -164,6 +180,7 @@ def test_a_very_long_call_is_matched_in_a_fraction_of_a_second(raw):
         guard.check(tool, {field: raw})
         assert time.perf_counter() - started < 5.0, (tool, raw[:30])  # 0.6 s worst measured; the old patterns took minutes
     assert guard.check("terminal", {"command": "hermes " * 20000 + "hermes guardian set calendar=cmd:x"})["action"] == "approve"
+    assert guard.check("terminal", {"command": LONG["escaped-road-at-the-end"]})["action"] == "approve"
 
 
 def test_the_hook_is_registered_declared_and_cannot_stop_the_agent_when_it_fails(monkeypatch):

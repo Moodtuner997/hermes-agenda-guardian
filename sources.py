@@ -21,6 +21,7 @@ from .model import Event
 from .texts import tr
 
 TIMEOUT = 25
+MAX_ICS_BYTES = 5 * 1024 * 1024  # a secret ICS address answers with a few hundred KB; a server that goes on is cut off
 GOOGLE_SCRIPT = Path("skills") / "productivity" / "google-workspace" / "scripts" / "google_api.py"
 MAX_ITERATIONS = 4000
 
@@ -332,6 +333,8 @@ class _CheckedHTTPS(urllib.request.HTTPSHandler):
 
     def https_open(self, req):
         parts = urllib.parse.urlsplit(req.full_url)
+        if "\\" in parts.netloc:  # urlsplit and http.client would read the host two ways: refuse what is read twice
+            raise urllib.error.URLError(f"address refused: a backslash in the host part of {parts.scheme}://{parts.netloc}")
         addresses = verified_addresses(parts.hostname or "", parts.port or 443, self._getaddrinfo)
         return self.do_open(lambda host, **kw: _CheckedConnection(host, addresses=addresses, context=self._context, **kw),
                             req)
@@ -343,6 +346,8 @@ class _SameHostRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         old = urllib.parse.urlsplit(req.full_url)
         new = urllib.parse.urlsplit(newurl)  # already joined to the old address by urllib
+        if "\\" in new.netloc or "@" in new.netloc:  # a user-info part or a backslash: the host is read two ways
+            raise urllib.error.URLError(f"redirect to {new.scheme}://{new.netloc} refused: odd characters in the host part")
         if (new.scheme != "https" or (new.hostname or "").lower() != (old.hostname or "").lower()
                 or (new.port or 443) != (old.port or 443)):
             raise urllib.error.URLError(f"redirect to {new.scheme}://{new.netloc} refused: only the same https host may answer")
@@ -421,7 +426,10 @@ def fetch_range(profile: dict, first: date, last: date, home: Path, *, run=subpr
                     raise SourceError(tr(lang, "ics_https_only"))
                 request = urllib.request.Request(location, headers={"User-Agent": "hermes-agenda-guardian"})
                 with urlopen(request, timeout=TIMEOUT) as response:
-                    text = response.read().decode("utf-8", "replace")
+                    raw = response.read(MAX_ICS_BYTES + 1)
+                if len(raw) > MAX_ICS_BYTES:
+                    raise SourceError(tr(lang, "ics_too_big", mb=MAX_ICS_BYTES // (1024 * 1024)))
+                text = raw.decode("utf-8", "replace")
             else:
                 text = Path(location).read_text(encoding="utf-8", errors="replace")
         except OSError as exc:

@@ -193,7 +193,8 @@ in a terminal; `/day setup auto` adopts a working Google calendar the same way.
 - **Side roads, guarded since 0.5.2.** A `pre_tool_call` hook looks at the arguments of four tools, `terminal`,
   `execute_code`, `write_file` and `patch`, and sends the call to Hermes' own approval gate when it is: `hermes ...
   guardian` followed by `set ... calendar=...` or `setup auto` (quotes and line continuations are read the way a
-  shell reads them); a call to the package's `apply_setting`, `set_rules` or `save_profile` that mentions
+  shell reads them, and a one-character escape such as `calendar\=` in bash or `calendar^=` in cmd.exe is dropped
+  as the shell drops it, since 0.5.3); a call to the package's `apply_setting`, `set_rules` or `save_profile` that mentions
   `calendar`, or to `setup_auto` or `agenda_guardian`; or a mention of the plugin's folders (`plugins/`,
   `plugin-data/` or `scripts/` followed by `agenda-guardian`) or of its database `guardian.db` (a read from the
   terminal asks too; `read_file` and `search_files` are not watched). The prompt shows the whole call when it is
@@ -202,8 +203,7 @@ in a terminal; `/day setup auto` adopts a working Google calendar the same way.
   nothing else. In a cron run nobody can answer, so the call is refused. **This is not a security boundary.** A call
   that hides what it does is not recognised: base64, a path built in pieces, another interpreter, a script written
   with `write_file` and run later (the content is shown, not scanned), `plugins/./agenda-guardian`, a relative path
-  after an approved `cd`, a backslash or caret escape inside the key (`calendar\=cmd:x` in bash, `calendar^=cmd:x` in
-  cmd.exe). The agent's terminal already runs under Hermes' own approvals, and under `approvals.mode:
+  after an approved `cd`. The agent's terminal already runs under Hermes' own approvals, and under `approvals.mode:
   off` or Hermes' yolo mode (`hermes -z` sets it) Hermes answers yes without asking, as it does for every call. The
   guard closes the obvious roads and puts a person on the one that would leave a program run at every plan. It reads
   no config and no file, its patterns are bounded (0.6 s at worst on a 260 KB call, measured in the tests; Hermes
@@ -213,8 +213,11 @@ in a terminal; `/day setup auto` adopts a working Google calendar the same way.
 - **ICS over the network:** `https://` only. The host is resolved and every address it answers with must be public
   (loopback, private, link-local including the cloud metadata address, carrier-grade NAT and reserved ranges are
   refused); the connection goes to the address that was checked, with the host name kept for the certificate. A
-  redirect to another host, port or scheme is refused, and every hop is checked again. No proxy is used. A local
-  `ics:<path>` file is read as is.
+  redirect to another host, port or scheme is refused, and every hop is checked again; so is an address or a
+  redirect whose host part holds a backslash (or, for a redirect, a user-info `@`), which Python and the HTTP client
+  would read as two different hosts. An answer larger than 5 MB is refused, with a visible warning (the read stops
+  at 5 MB + 1 byte; a calendar answers with a few hundred KB). No proxy is used. A local `ics:<path>` file is read
+  as is.
 - **Calendar programs** (`google` and `cmd:`) start with `PATH`, `HOME`, the locale (`LANG`, `LC_*`), `TZ` and
   `HERMES_HOME` (plus `SYSTEMROOT`, `TEMP`, `TMP`, `USERPROFILE`, `PATHEXT` and `COMSPEC` on Windows), and nothing
   else: none of the provider keys Hermes holds, no proxy variable. A `cmd:` program that needs another variable must
@@ -342,7 +345,7 @@ Hermes config (the rule Hermes applies to its own `cronjob` tools; an unreadable
 ## Development
 
 ```
-python -m pytest tests -q                  # 359 tests, no Hermes needed
+python -m pytest tests -q                  # 390 tests, no Hermes needed
 hermes plugins validate .
 HERMES_HOME=<home> <hermes python> tests/e2e_hermes.py     # real tool calls, real cron, no model
 python tests/make_demo_profile.py --home <home>             # an invented day for screenshots

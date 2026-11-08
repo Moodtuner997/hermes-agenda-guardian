@@ -270,6 +270,29 @@ def test_a_redirect_to_another_host_is_refused_by_the_opener():
         run_hops([(302, "https://evil.example/a.ics")], answers(PUBLIC))
 
 
+@pytest.mark.parametrize("location", [
+    "https://evil.example\\@calendar.example/x",   # urlsplit says calendar.example, http.client gets the whole netloc
+    "https://user@calendar.example/x",             # a user-info part
+    "https://calendar.example\\.evil.example/x",
+    "https://calendar.example\\/x",
+])
+def test_a_redirect_whose_host_part_is_read_two_ways_is_refused(location):
+    with pytest.raises(urllib.error.URLError, match="odd characters"):
+        redirect("https://calendar.example/a.ics", location)
+
+
+def test_a_backslash_in_the_host_part_of_an_address_is_refused_before_any_name_is_resolved(no_socket):
+    dns = answers(PUBLIC)
+    with pytest.raises(urllib.error.URLError, match="backslash"):
+        run_hops_from("https://evil.example\\@calendar.example/a.ics", [(200, None)], dns)
+    assert dns.asked == []
+
+
+def run_hops_from(url, answers_list, dns):
+    Hops.script = SimpleNamespace(hops=[], answers=list(answers_list))
+    return sources.build_opener(dns, https=Hops).open(urllib.request.Request(url), timeout=3)
+
+
 def test_the_calendar_rule_refuses_plain_http_when_it_is_set_and_keeps_https(profile):
     for typed in ("ics:http://calendar.example/a.ics", "ics:HTTP://calendar.example/a.ics"):
         with pytest.raises(ValueError, match="must start with https://"):

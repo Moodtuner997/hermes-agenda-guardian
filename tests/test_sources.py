@@ -151,8 +151,48 @@ class IcsResponse:
     def __exit__(self, *a):
         return False
 
-    def read(self):
-        return ICS.encode()
+    def read(self, size=-1):
+        data = ICS.encode()
+        return data if size < 0 else data[:size]
+
+
+class EndlessResponse(IcsResponse):
+    """A server that never stops sending: counts what was asked of it, hands out exactly what is asked."""
+
+    def __init__(self):
+        self.asked = []
+
+    def read(self, size=-1):
+        self.asked.append(size)
+        return b"X" * (size if size >= 0 else 10**9)
+
+
+def test_an_ics_answer_past_the_limit_is_refused_and_never_read_whole(tmp_path):
+    response = EndlessResponse()
+    profile = prof.new_profile()
+    profile["calendar"] = {"type": "ics", "path": "https://example.test/cal.ics"}
+    with pytest.raises(SourceError, match="more than 5 MB"):
+        fetch_events(profile, MONDAY, tmp_path, urlopen=lambda request, timeout: response)
+    assert response.asked == [sources.MAX_ICS_BYTES + 1]
+
+
+def test_an_ics_answer_of_exactly_the_limit_is_read(tmp_path):
+    class Exact(IcsResponse):
+        def read(self, size=-1):
+            return (ICS + "\r\n" * 10).encode().ljust(sources.MAX_ICS_BYTES, b" ")[:size if size >= 0 else None]
+
+    profile = prof.new_profile()
+    profile["calendar"] = {"type": "ics", "path": "https://example.test/cal.ics"}
+    events, warnings = fetch_events(profile, MONDAY, tmp_path, urlopen=lambda request, timeout: Exact())
+    assert titles(events) == ["Birthday", "Stand, up"] and warnings == []
+
+
+def test_the_too_big_answer_is_said_in_french_too(tmp_path):
+    profile = prof.new_profile()
+    profile["language"] = "fr"
+    profile["calendar"] = {"type": "ics", "path": "https://example.test/cal.ics"}
+    with pytest.raises(SourceError, match="plus de 5 Mo"):
+        fetch_events(profile, MONDAY, tmp_path, urlopen=lambda request, timeout: EndlessResponse())
 
 
 def test_ics_url_is_fetched_over_https(tmp_path):

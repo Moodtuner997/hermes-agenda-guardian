@@ -202,7 +202,8 @@ in a terminal; `/day setup auto` adopts a working Google calendar the same way.
   nothing else. In a cron run nobody can answer, so the call is refused. **This is not a security boundary.** A call
   that hides what it does is not recognised: base64, a path built in pieces, another interpreter, a script written
   with `write_file` and run later (the content is shown, not scanned), `plugins/./agenda-guardian`, a relative path
-  after an approved `cd`. The agent's terminal already runs under Hermes' own approvals, and under `approvals.mode:
+  after an approved `cd`, a backslash or caret escape inside the key (`calendar\=cmd:x` in bash, `calendar^=cmd:x` in
+  cmd.exe). The agent's terminal already runs under Hermes' own approvals, and under `approvals.mode:
   off` or Hermes' yolo mode (`hermes -z` sets it) Hermes answers yes without asking, as it does for every call. The
   guard closes the obvious roads and puts a person on the one that would leave a program run at every plan. It reads
   no config and no file, its patterns are bounded (0.6 s at worst on a 260 KB call, measured in the tests; Hermes
@@ -286,7 +287,7 @@ Hermes config (the rule Hermes applies to its own `cronjob` tools; an unreadable
 - **Dashboard:** `GET /plan`, `GET /week`, `POST /tasks`, `POST /tasks/<id>/done`, `POST /proposals/<id>/ok`,
   `POST /proposals/<id>/refuse`, `POST /groups/<id>/undo` under `/api/plugins/agenda-guardian/`, behind the
   dashboard's own authentication. Writing from the dashboard needs the same `/day write on` switch.
-- **System prompt:** one short section (rules for the agent, about 1,700 characters, in your language).
+- **System prompt:** one short section (rules for the agent, about 1,600 characters in English and 1,800 in French).
 - **Hooks:** two. `pre_gateway_dispatch` looks at the text of each incoming chat message and acts on one
   case only: a message that starts with `/day` followed by anything other than a format-free command (`help`,
   `plan`, `now`, `list`, `brief`, `ok`, `undo`, `write`, `cron`), or `set` with a `calendar=` pair, or `setup auto`
@@ -306,7 +307,8 @@ Hermes config (the rule Hermes applies to its own `cronjob` tools; an unreadable
 - Tested on Hermes 0.22.7 on Windows 11 and on Linux (arm64, Python 3.12): unit tests, `hermes plugins validate`
   and an end-to-end run with real tool calls, real cron creation and Hermes' own script runner. On Windows, one
   real agent turn (Claude subscription provider) turned the schedule on through `day_schedule` and Hermes listed
-  the two script-only jobs; the slash command, the CLI and the dashboard tab were exercised there too.
+  the two script-only jobs; the slash command, the CLI and the dashboard tab were exercised there too. By hand on
+  Windows 11, `hermes plugins validate` and the end-to-end run also pass on Hermes `v0.23.0` (not in CI).
 - Every push and pull request runs the unit tests on Linux, Windows and macOS (GitHub-hosted `ubuntu-latest`,
   `windows-latest`, `macos-latest`), then installs Hermes 0.22.7 from its lockfile, runs `hermes plugins validate
   --install-deps` and the same end-to-end script on each. The approval prompt a human sees when the guard asks is

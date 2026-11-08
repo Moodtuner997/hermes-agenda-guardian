@@ -246,16 +246,22 @@ def _child_env(home: Path, environ=None, windows: bool | None = None) -> dict[st
 _NO_GOOGLE_LIBRARY = re.compile(r"No module named 'google")  # google.oauth2, googleapiclient, google_auth_oauthlib
 
 
-def _run_json(argv: list[str], run, home: Path) -> object:
+class ProgramNotStarted(SourceError):
+    """The system could not start the program at all (missing, not executable, not a program): it never ran."""
+
+
+def _run_json(argv: list[str], run, home: Path, google: bool = False) -> object:
     try:
         done = run(argv, capture_output=True, text=True, timeout=TIMEOUT, shell=False, env=_child_env(home))
     except FileNotFoundError:
-        raise SourceError(f"calendar program not found: {argv[0]}")
+        raise ProgramNotStarted(f"calendar program not found: {argv[0]}")
+    except OSError as exc:  # PermissionError, "not a valid Win32 application", exec format error
+        raise ProgramNotStarted(f"calendar program could not start: {Path(argv[0]).name} ({exc.strerror or type(exc).__name__})")
     except subprocess.TimeoutExpired:
         raise SourceError(f"calendar program timed out after {TIMEOUT}s: {argv[0]}")
     if done.returncode != 0:
         detail = (done.stderr or done.stdout or "").strip().splitlines()
-        if detail and _NO_GOOGLE_LIBRARY.search(detail[-1]):  # the Python of a managed install can lack them
+        if google and detail and _NO_GOOGLE_LIBRARY.search(detail[-1]):  # the Python of a managed install can lack them
             raise SourceError(f"the Google Workspace skill cannot import its libraries ({detail[-1][:120]}): run its "
                               "setup.py with --install-deps using the Python of the Hermes environment, then restart Hermes")
         raise SourceError(f"calendar program exited {done.returncode}: {detail[-1][:200] if detail else 'no output'}")
@@ -417,7 +423,7 @@ def google_python(find_spec=None, executable: str | None = None, prefix: str | N
         python = env / "Scripts" / "python.exe" if windows else env / "bin" / "python"
         if (env / "pyvenv.cfg").is_file() and python.is_file() and env.resolve() != Path(prefix).resolve():
             return str(python)
-    except (ImportError, ValueError, AttributeError, IndexError, OSError):
+    except Exception:  # advisory: whatever a finder or a path does wrong, the running interpreter is the answer
         pass
     return executable
 
@@ -428,6 +434,19 @@ def google_argv(home: Path, *args: str) -> list[str]:
     if not script.exists():
         raise SourceError(f"Google Workspace skill not found at {script}")
     return [google_python(), str(script), *args]
+
+
+def run_google(home: Path, *args: str, run=subprocess.run) -> object:
+    """One call of the Google skill's script, decoded. If the interpreter chosen for it cannot even start (a venv
+    redirector the system refuses, a removed base interpreter), the running one is tried once: the script never
+    ran, so nothing is done twice."""
+    argv = google_argv(home, *args)
+    try:
+        return _run_json(argv, run, home, google=True)
+    except ProgramNotStarted:
+        if argv[0] == sys.executable:
+            raise
+        return _run_json([sys.executable, *argv[1:]], run, home, google=True)
 
 
 def iso_utc(moment: datetime, tzname: str) -> str:
@@ -449,10 +468,11 @@ def fetch_range(profile: dict, first: date, last: date, home: Path, *, run=subpr
     if kind in ("google", "command"):
         start_iso, end_iso = iso_utc(lo, tzname), iso_utc(hi, tzname)
         if kind == "google":
-            argv = google_argv(home, "calendar", "list", "--start", start_iso, "--end", end_iso, "--max", str(limit))
+            data = run_google(home, "calendar", "list", "--start", start_iso, "--end", end_iso, "--max", str(limit),
+                              run=run)
         else:
             argv = [a.replace("{start}", start_iso).replace("{end}", end_iso) for a in source["argv"]]
-        data = _run_json(argv, run, home)
+            data = _run_json(argv, run, home)
         events = _json_events(data, tzname)
         if kind == "google" and isinstance(data, list) and len(data) >= limit and first != last:
             warnings.append(tr(lang, "range_cut", n=limit))

@@ -176,7 +176,7 @@ What it will and will not do:
 
 | Value | Reads |
 | --- | --- |
-| `google` | the Google Workspace skill's script (`calendar list`), with your existing Google login; it runs on the interpreter that can import the skill's libraries (under a managed Hermes 0.23, the dependency environment's own `python`, since 0.5.4) |
+| `google` | the Google Workspace skill's script (`calendar list`), with your existing Google login; it runs on the Python of the environment that holds the skill's libraries (under a managed Hermes 0.23, the dependency environment's own `python`, since 0.5.4; if that Python cannot start, the running one is tried once) |
 | `ics:<path or https URL>` | an ICS file or the secret `https://` ICS address of a calendar (Outlook, Google, Apple) |
 | `file:<path>` | a JSON file: a list of `{summary, start, end}` (the shape the Google script prints) |
 | `cmd:<program and arguments>` | any program that prints that JSON; `{start}` and `{end}` are replaced by the day's UTC bounds; run without a shell |
@@ -347,7 +347,7 @@ Hermes config (the rule Hermes applies to its own `cronjob` tools; an unreadable
 ## Development
 
 ```
-python -m pytest tests -q                  # 442 tests, no Hermes needed
+python -m pytest tests -q                  # 450 tests, no Hermes needed
 hermes plugins validate .
 HERMES_HOME=<home> <hermes python> tests/e2e_hermes.py     # real tool calls, real cron, no model
 python tests/make_demo_profile.py --home <home>             # an invented day for screenshots

@@ -132,6 +132,31 @@ for name in ("agenda-guardian-brief.py", "agenda-guardian-nudge.py"):
     if name.endswith("brief.py"):
         check("the brief script prints a plan", out.startswith("Plan for"), out[:200])
 
+# The duration question: a written activity ended ten minutes ago; the real nudge job, run by Hermes' own
+# scheduler (no model), says it once and then stays silent.
+import sqlite3  # noqa: E402
+from datetime import datetime, timedelta  # noqa: E402
+
+from cron.jobs import get_job  # noqa: E402
+from cron.scheduler import SILENT_MARKER, run_job  # noqa: E402
+
+ended = datetime.now().replace(microsecond=0) - timedelta(minutes=10)
+db = sqlite3.connect(str(Path(os.environ["HERMES_HOME"]) / "plugin-data" / "agenda-guardian" / "guardian.db"))
+db.execute("INSERT INTO written (event_id, calendar_id, group_id, kind, part, summary, start, end, link, created_at) "
+           "VALUES ('e2e-sport', 'primary', 99, 'sport', 'main', 'sport', ?, ?, '', ?)",
+           ((ended - timedelta(minutes=90)).isoformat(), ended.isoformat(), ended.isoformat()))
+db.commit()
+db.close()
+nudge_id = next((j.get("job_id") or j.get("id") for j in mine if j.get("name") == "agenda-guardian-nudge"), None)
+first = run_job(get_job(nudge_id)) if nudge_id else (False, "", "", "no nudge job")
+check("the nudge job, run by Hermes' scheduler, asks how long the activity really took",
+      first[0] and "How long did it really take" in first[2] and f"{ended:%H:%M}" in first[2], repr(first)[:300])
+second = run_job(get_job(nudge_id)) if nudge_id else (False, "", "", "no nudge job")
+check("the question is asked once: the next run of the job is silent", second[0] and second[2] == SILENT_MARKER,
+      repr(second)[:300])
+answered = tool("day_took", {"actual_minutes": 70})
+check("a bare duration answers it", answered.get("ok") is True and answered.get("real_minutes") == 70, json.dumps(answered)[:300])
+
 off = tool("day_schedule", {"action": "off"})
 check("day_schedule off removes the jobs", "Removed 2" in json.dumps(off), json.dumps(off)[:300])
 jobs = tool("cronjob_manage", {"action": "list"})

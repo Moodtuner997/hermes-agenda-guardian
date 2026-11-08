@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import http.client
+import importlib.util
 import ipaddress
 import json
 import os
@@ -23,6 +24,7 @@ from .texts import tr
 TIMEOUT = 25
 MAX_ICS_BYTES = 5 * 1024 * 1024  # a secret ICS address answers with a few hundred KB; a server that goes on is cut off
 GOOGLE_SCRIPT = Path("skills") / "productivity" / "google-workspace" / "scripts" / "google_api.py"
+GOOGLE_LIBRARY = "googleapiclient"  # what the skill's script imports first when it has no `gws` to call
 MAX_ITERATIONS = 4000
 
 
@@ -241,6 +243,9 @@ def _child_env(home: Path, environ=None, windows: bool | None = None) -> dict[st
     return env
 
 
+_NO_GOOGLE_LIBRARY = re.compile(r"No module named 'google")  # google.oauth2, googleapiclient, google_auth_oauthlib
+
+
 def _run_json(argv: list[str], run, home: Path) -> object:
     try:
         done = run(argv, capture_output=True, text=True, timeout=TIMEOUT, shell=False, env=_child_env(home))
@@ -250,6 +255,9 @@ def _run_json(argv: list[str], run, home: Path) -> object:
         raise SourceError(f"calendar program timed out after {TIMEOUT}s: {argv[0]}")
     if done.returncode != 0:
         detail = (done.stderr or done.stdout or "").strip().splitlines()
+        if detail and _NO_GOOGLE_LIBRARY.search(detail[-1]):  # the Python of a managed install can lack them
+            raise SourceError(f"the Google Workspace skill cannot import its libraries ({detail[-1][:120]}): run its "
+                              "setup.py with --install-deps using the Python of the Hermes environment, then restart Hermes")
         raise SourceError(f"calendar program exited {done.returncode}: {detail[-1][:200] if detail else 'no output'}")
     try:
         return json.loads(done.stdout)
@@ -388,12 +396,38 @@ def fetch_events(profile: dict, day: date, home: Path, *, run=subprocess.run,
     return fetch_range(profile, day, day, home, run=run, urlopen=urlopen)
 
 
+def google_python(find_spec=None, executable: str | None = None, prefix: str | None = None) -> str:
+    """The interpreter that can import the skill's Google libraries.
+
+    A managed Hermes (0.23) runs on the store's base interpreter and only puts its dependency environment on
+    ``sys.path``: ``sys.executable`` cannot import what that environment holds, its own ``python`` can. So when the
+    library is found in this process, inside a virtual environment this process is not running on, that
+    environment's interpreter is the answer; otherwise (no library found, a system install, an interpreter that is
+    already the environment's) the running one. Nothing is added to the child's environment."""
+    executable = sys.executable if executable is None else executable
+    prefix = sys.prefix if prefix is None else prefix
+    try:
+        spec = (find_spec or importlib.util.find_spec)(GOOGLE_LIBRARY)
+        places = list(getattr(spec, "submodule_search_locations", None) or ())
+        site = Path(places[0]).parent if places else None
+        if site is None or site.name != "site-packages":  # dist-packages, a zip, a source checkout: not an environment
+            return executable
+        windows = site.parent.name.lower() == "lib"  # <env>\Lib\site-packages, else <env>/lib/pythonX.Y/site-packages
+        env = site.parents[1] if windows else site.parents[2]
+        python = env / "Scripts" / "python.exe" if windows else env / "bin" / "python"
+        if (env / "pyvenv.cfg").is_file() and python.is_file() and env.resolve() != Path(prefix).resolve():
+            return str(python)
+    except (ImportError, ValueError, AttributeError, IndexError, OSError):
+        pass
+    return executable
+
+
 def google_argv(home: Path, *args: str) -> list[str]:
-    """The Google Workspace skill's script, run with the interpreter Hermes itself runs on."""
+    """The Google Workspace skill's script, run with an interpreter that can import its libraries."""
     script = home / GOOGLE_SCRIPT
     if not script.exists():
         raise SourceError(f"Google Workspace skill not found at {script}")
-    return [sys.executable, str(script), *args]
+    return [google_python(), str(script), *args]
 
 
 def iso_utc(moment: datetime, tzname: str) -> str:

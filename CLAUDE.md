@@ -37,6 +37,14 @@ ni un agenda particulier.
   outils (relecture du 8/11 : 67 s à 260 Ko ; maintenant moins de 3 s au pire sur deux champs de 260 Ko, test `LONG` de `test_guard.py`).
 - Le programme d'agenda (script Google ou `cmd:`) démarre avec `sources._child_env` (PATH, HOME, locale, TZ,
   HERMES_HOME, plus le minimum Windows) : jamais une clé de fournisseur ni une variable de proxy.
+- Interpréteur du script Google (0.5.4, ticket 12) : `sources.google_python` ; sous le lancement géré de Hermes 0.23
+  (`python3 -I -c …` du dossier `tools/`), `sys.executable` est le Python de base, sans `googleapiclient`, alors que
+  l'environnement de dépendances (sur `sys.path` seulement) l'a. On cherche la bibliothèque dans le processus
+  (`importlib.util.find_spec`), on en déduit l'environnement (`<env>/lib/pythonX.Y/site-packages` ou `<env>\Lib\site-packages`,
+  avec `pyvenv.cfg`) et son `bin/python` (`Scripts\python.exe` sous Windows) ; sinon `sys.executable`. Jamais de
+  `PYTHONPATH` ajouté à l'enfant. Une bibliothèque manquante donne un message qui dit quoi faire (`setup.py
+  --install-deps`, puis redémarrer Hermes). Pas prouvé : Windows avec une installation « scellée » (Hermes y refuse
+  `Scripts\python.exe` à ses propres outils, `pm.environments.venv_command`) ; l'e2e du dépôt ne voit pas le défaut.
 - ICS par URL : `https` seul, toute adresse résolue publique, connexion à l'adresse vérifiée, redirection vers le même
   hôte seulement, ni proxy ni http (`sources.safe_urlopen`, défaut de `fetch_*` et de `Guardian`) ; depuis la 0.5.3, une
   réponse de plus de 5 Mo est refusée (`MAX_ICS_BYTES`, lecture coupée à 5 Mo + 1 octet) et une adresse ou une redirection
@@ -45,7 +53,7 @@ ni un agenda particulier.
   > 0) est une erreur visible, jamais un agenda vide.
 - `day_schedule` on/off est refusé dans une session de cron tant que `cron.allow_agent_scheduling` n'est pas vrai
   (config illisible = refus ; `status` reste permis).
-- Chaque modification passe `python -m pytest tests -q` (427 tests), `hermes plugins validate .`, puis, si le cron,
+- Chaque modification passe `python -m pytest tests -q` (442 tests), `hermes plugins validate .`, puis, si le cron,
   le tableau de bord, un outil ou le hook bougent, `tests/e2e_hermes.py` avec l'interpréteur de Hermes (dans un
   `HERMES_HOME` jetable : un dossier avec `config.yaml` qui active le plugin et une copie du plugin).
 - README, PR et textes publics en anglais ; commits en français, format conventionnel.

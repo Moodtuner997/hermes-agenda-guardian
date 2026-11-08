@@ -6,7 +6,8 @@ the week with reasons drawn from the calendar's history, and writes to a Google 
 typed ``/day write on`` and said yes, removing only what it wrote. It never calls a model: ``/day`` (slash),
 ``hermes guardian`` (CLI) and fifteen tools for the agent share one core. ``/day`` followed by anything but a
 format-free command (write, undo, plan...) is a request in plain words: it goes to the agent, not to the parser,
-except ``set ... calendar=...`` and ``setup auto``: the calendar source is the user's alone, no tool sets it.
+except ``set ... calendar=...`` and ``setup auto``: the calendar source is the user's alone, no tool sets it, and
+the ``pre_tool_call`` guard asks a human before the agent's terminal, code or file tools take an obvious side road.
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from . import commands
+from . import commands, guard
 from .core import Guardian, UserError, parse_day, parse_minutes
 from .profile import normal_key
 from .texts import tr
@@ -87,6 +88,14 @@ def _plain_words(event: Any = None, **_: Any) -> dict | None:
     except Exception:  # a hook must never stop a message
         pass
     return None
+
+
+def _guard_tools(tool_name: str = "", args: Any = None, **_: Any) -> dict | None:
+    """pre_tool_call: see ``guard``. An error in the matcher lets the call through (not a security boundary)."""
+    try:
+        return guard.check(tool_name, args)
+    except Exception:
+        return None
 
 
 def _cli_setup(parser: Any) -> None:
@@ -408,6 +417,10 @@ def register(ctx: Any) -> None:
     if hasattr(ctx, "register_hook"):  # "/day <sentence>" reaches the agent as an ordinary message
         try:
             ctx.register_hook("pre_gateway_dispatch", _plain_words)
+        except Exception:
+            pass
+        try:  # a human confirms the side roads to the calendar source (guard.py); an older Hermes still loads us
+            ctx.register_hook("pre_tool_call", _guard_tools)
         except Exception:
             pass
     if hasattr(ctx, "register_system_prompt_section"):  # older Hermes: the tool descriptions carry the rules

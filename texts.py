@@ -42,6 +42,12 @@ EN = {
                            "/day set calendar=<source> in the chat; to take the Google calendar this profile "
                            "already has, /day setup auto. Do not retry with another spelling or another tool, and "
                            "do not run a command to set it yourself.",
+    "guard_cron": "refused: the calendar source and the storage of the agenda planner are the user's to change, and "
+                  "nobody is here to confirm it (this is a scheduled run). Do not look for another way.",
+    "guard_ask": "agenda-guardian: this {tool} call would {what}. Allow it only if you asked for it. Call: {shown}",
+    "guard_calendar": "set the calendar source (the program or address it names is run or read at every plan)",
+    "guard_code": "change the planner's rules from code, which could set the calendar source",
+    "guard_storage": "touch the planner's own folder or its database, where the calendar source is kept",
     "no_rules_warning": "None of your planning rules are set yet, so defaults are used. Run /day setup.",
     "cal_unreadable": "Calendar unreadable ({why}): the plan ignores your meetings.",
     "add_name": 'Give the task a name: /day add "Write the quote" 45m',
@@ -211,6 +217,12 @@ FR = {
     "calendar_user_only": "la source d'agenda, c'est toi qui la choisis, un assistant ne peut pas la régler : tape "
                           "toi-même /day set calendar=<google, ics:<URL https ou fichier>, file:<fichier json>, "
                           "cmd:<programme>, ou none>",
+    "guard_cron": "refusé : la source d'agenda et le stockage du planificateur, c'est l'utilisateur qui les change, et "
+                  "personne n'est là pour confirmer (c'est une exécution programmée). Ne cherche pas un autre chemin.",
+    "guard_ask": "agenda-guardian : cet appel {tool} va {what}. Autorise seulement si tu l'as demandé. Appel : {shown}",
+    "guard_calendar": "fixer la source d'agenda (le programme ou l'adresse nommé est lancé ou lu à chaque plan)",
+    "guard_code": "changer les règles du planificateur par du code, ce qui pourrait fixer la source d'agenda",
+    "guard_storage": "toucher au dossier du planificateur ou à sa base, où la source d'agenda est gardée",
     "no_rules_warning": "Aucune de tes règles n'est encore réglée : les valeurs par défaut servent. "
                         "Lance /day setup.",
     "cal_unreadable": "Agenda illisible ({why}) : le plan ignore tes réunions.",

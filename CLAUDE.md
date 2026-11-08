@@ -20,17 +20,23 @@ ni un agenda particulier.
 - Un calendrier illisible ou absent donne un avertissement visible, jamais un jour vide silencieux.
 - Un seul chemin d'écriture : tout ce qui s'écrit passe par une proposition (`day_propose`, `day_week_plan` ou
   `day_stage`, un plan composé par l'agent) puis `day_confirm`. La consigne système interdit tout autre outil
-  d'agenda ; le plugin ne peut pas le bloquer (voir Pièges).
+  d'agenda ; le plugin ne bloque pas les écritures Google des autres outils (le garde `pre_tool_call` ne couvre que les voies vers la
+  source d'agenda, voir Pièges).
 - Seul l'utilisateur fixe la source d'agenda (`calendar`) : aucun outil ne la pose, `google` et `none` compris
   (`apply_setting(..., from_tool=True)` refuse, `setup_auto(from_tool=True)` laisse l'agenda). `/day set … calendar=…` et
   `/day setup auto` tapés sont traités par le répartiteur (`commands.sets_calendar`), jamais réécrits pour l'agent.
+- `guard.py` (hook `pre_tool_call`, 0.5.2) : pour `terminal`, `execute_code`, `write_file` et `patch`, la commande
+  `hermes … guardian` qui pose `calendar` (`commands.sets_calendar`), les fonctions du paquet (`apply_setting`,
+  `set_rules`, `setup_auto`, `save_profile`) et le dossier du plugin ou sa base passent par l'approbation de Hermes
+  (`approve`, une `rule_key` par appel exact, jamais une clé du plugin) ; en session de cron : `block`. Ce n'est pas une
+  frontière de sécurité (commande masquée non vue, dit dans le README) ; une erreur du filtre laisse passer l'appel.
 - Le programme d'agenda (script Google ou `cmd:`) démarre avec `sources._child_env` (PATH, HOME, locale, TZ,
   HERMES_HOME, plus le minimum Windows) : jamais une clé de fournisseur ni une variable de proxy.
 - ICS par URL : `https` seul, toute adresse résolue publique, connexion à l'adresse vérifiée, redirection vers le même
   hôte seulement, ni proxy ni http (`sources.safe_urlopen`, défaut de `fetch_*` et de `Guardian`).
 - `day_schedule` on/off est refusé dans une session de cron tant que `cron.allow_agent_scheduling` n'est pas vrai
   (config illisible = refus ; `status` reste permis).
-- Chaque modification passe `python -m pytest tests -q` (276 tests), `hermes plugins validate .`, puis, si le cron,
+- Chaque modification passe `python -m pytest tests -q` (330 tests), `hermes plugins validate .`, puis, si le cron,
   le tableau de bord, un outil ou le hook bougent, `tests/e2e_hermes.py` avec l'interpréteur de Hermes (dans un
   `HERMES_HOME` jetable : un dossier avec `config.yaml` qui active le plugin et une copie du plugin).
 - README, PR et textes publics en anglais ; commits en français, format conventionnel.
@@ -87,6 +93,15 @@ ni un agenda particulier.
   et refuse localhost, 127.0.0.1, http et une redirection vers un autre hôte (`https://www.github.com/`). `example.com`
   échoue sur ce poste (« unable to get local issuer certificate », même avec `urlopen` simple) : sonde réelle sur
   python.org.
+- `pre_tool_call` (`guard.py`, 0.5.2), mesuré le 8/11 : `approve` et `request_tool_approval` existent aux étiquettes
+  Hermes v0.22.7 et v0.23.0 (`gh api …/contents/hermes_cli/plugins.py?ref=…`), l'A1 est en 0.23.0. Hermes bloque (fail
+  closed) un `pre_tool_call` qui dépasse `plugins.hook_callback_timeout` (30 s) : le garde ne lit ni config ni base.
+  `block` l'emporte sur `approve` ; en cron `approvals.cron_mode` pourrait auto-approuver, d'où un `block` direct. Noms
+  d'outils et arguments relevés dans Hermes : `terminal` (`command`, `workdir`), `execute_code` (`code`), `write_file`
+  (`path`, `content`), `patch` (`path`, `old_string`, `new_string`, `patch` en V4A). Le test e2e remplace
+  `tools.approval.request_tool_approval` par un enregistreur : l'invite interactive elle-même n'est pas exercée (avec
+  `HERMES_INTERACTIVE=1` et sans terminal elle attendrait sur stdin). Le garde ne couvre pas les écritures Google des
+  autres outils : décision de Théo si on veut l'étendre.
 - Non prouvé : la 0.5.0 sur Telegram (crochet sur une vraie passerelle, agent qui appelle `day_week_plan` avec un
   chiffre supposé au lieu de questionner ou d'écrire à la main), question de durée envoyée par le cron, livraison
   Telegram/WhatsApp, macOS.

@@ -112,6 +112,41 @@ try:
 finally:
     os.environ.pop("HERMES_CRON_SESSION", None)
 
+# The pre_tool_call guard, through Hermes' own dispatch: a side road to the calendar source reaches the approval gate
+# (a recorder stands in for the human), an ordinary call never does, and a cron run is refused without asking anyone.
+import tools.approval as approval  # noqa: E402
+from hermes_cli.plugins import resolve_pre_tool_block  # noqa: E402
+
+asked: list[tuple] = []
+answer = {"approved": False, "message": "denied by the e2e"}
+real_gate = approval.request_tool_approval
+approval.request_tool_approval = lambda tool_name, reason, rule_key="", **kw: (
+    asked.append((tool_name, reason, rule_key)) or dict(answer))
+road = {"command": 'echo "hermes guardian set calendar=cmd:x"'}
+note = Path(os.environ["HERMES_HOME"]) / "plugin-data" / "agenda-guardian" / "e2e-note.txt"
+try:
+    denied = tool("terminal", road)
+    check("a side road to the calendar source reaches Hermes' approval gate with the exact call",
+          len(asked) == 1 and asked[0][0] == "terminal" and "hermes guardian set calendar=cmd:x" in asked[0][1]
+          and asked[0][2].startswith("agenda-guardian:calendar:"), repr(asked)[:300])
+    check("a denial stops the call", "denied by the e2e" in json.dumps(denied), json.dumps(denied)[:300])
+    asked.clear()
+    check("an ordinary call never reaches the gate",
+          resolve_pre_tool_block("terminal", {"command": "echo ok"}) is None and not asked)
+    answer.update(approved=True, message="")
+    written = tool("write_file", {"path": str(note), "content": "approved"})
+    check("an approved call goes through", len(asked) == 1 and asked[0][2].startswith("agenda-guardian:storage:")
+          and note.exists(), json.dumps(written)[:300] + repr(asked)[:200])
+    asked.clear()
+    os.environ["HERMES_CRON_SESSION"] = "1"
+    refused = tool("terminal", road)
+    check("in a cron run the same road is refused without asking anyone",
+          not asked and "nobody is here to confirm" in json.dumps(refused), json.dumps(refused)[:300])
+finally:
+    os.environ.pop("HERMES_CRON_SESSION", None)
+    approval.request_tool_approval = real_gate
+    note.unlink(missing_ok=True)
+
 on = tool("day_schedule", {"action": "on", "time": "07:30"})
 print(json.dumps(on, ensure_ascii=False)[:400])
 check("day_schedule on is accepted by the cron tool", on.get("ok") is True, json.dumps(on)[:300])

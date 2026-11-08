@@ -315,7 +315,7 @@ Hermes config (the rule Hermes applies to its own `cronjob` tools; an unreadable
 ## Development
 
 ```
-python -m pytest tests -q                  # 275 tests, no Hermes needed
+python -m pytest tests -q                  # 276 tests, no Hermes needed
 hermes plugins validate .
 HERMES_HOME=<home> <hermes python> tests/e2e_hermes.py     # real tool calls, real cron, no model
 python tests/make_demo_profile.py --home <home>             # an invented day for screenshots

@@ -30,7 +30,7 @@ ni un agenda particulier.
   hôte seulement, ni proxy ni http (`sources.safe_urlopen`, défaut de `fetch_*` et de `Guardian`).
 - `day_schedule` on/off est refusé dans une session de cron tant que `cron.allow_agent_scheduling` n'est pas vrai
   (config illisible = refus ; `status` reste permis).
-- Chaque modification passe `python -m pytest tests -q` (275 tests), `hermes plugins validate .`, puis, si le cron,
+- Chaque modification passe `python -m pytest tests -q` (276 tests), `hermes plugins validate .`, puis, si le cron,
   le tableau de bord, un outil ou le hook bougent, `tests/e2e_hermes.py` avec l'interpréteur de Hermes (dans un
   `HERMES_HOME` jetable : un dossier avec `config.yaml` qui active le plugin et une copie du plugin).
 - README, PR et textes publics en anglais ; commits en français, format conventionnel.

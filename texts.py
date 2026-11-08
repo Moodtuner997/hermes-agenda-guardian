@@ -35,13 +35,13 @@ EN = {
     "set_refused": "refused  {key}: {why}",
     "calendar_user_only": "the calendar source is yours to choose, an assistant cannot set it: type /day set "
                           "calendar=<google, ics:<https URL or file>, file:<json file>, cmd:<program>, or none> "
-                          "yourself, or run hermes guardian set calendar=<source> in a terminal",
+                          "yourself",
     "agent_calendar_user": "For the agent: the calendar source decides which program or address is run or read on "
                            "every plan, so no tool ever sets it, whatever the value (google, ics:, file:, cmd:, "
                            "none). Tell the user, in their language and plain words, to type it themselves: "
-                           "/day set calendar=<source> in the chat (or hermes guardian set calendar=<source> in a "
-                           "terminal); to take the Google calendar this profile already has, /day setup auto. Do "
-                           "not retry with another spelling or another tool.",
+                           "/day set calendar=<source> in the chat; to take the Google calendar this profile "
+                           "already has, /day setup auto. Do not retry with another spelling or another tool, and "
+                           "do not run a command to set it yourself.",
     "no_rules_warning": "None of your planning rules are set yet, so defaults are used. Run /day setup.",
     "cal_unreadable": "Calendar unreadable ({why}): the plan ignores your meetings.",
     "add_name": 'Give the task a name: /day add "Write the quote" 45m',
@@ -210,7 +210,7 @@ FR = {
     "set_refused": "refusé  {key} : {why}",
     "calendar_user_only": "la source d'agenda, c'est toi qui la choisis, un assistant ne peut pas la régler : tape "
                           "toi-même /day set calendar=<google, ics:<URL https ou fichier>, file:<fichier json>, "
-                          "cmd:<programme>, ou none>, ou lance hermes guardian set calendar=<source> dans un terminal",
+                          "cmd:<programme>, ou none>",
     "no_rules_warning": "Aucune de tes règles n'est encore réglée : les valeurs par défaut servent. "
                         "Lance /day setup.",
     "cal_unreadable": "Agenda illisible ({why}) : le plan ignore tes réunions.",

@@ -136,3 +136,14 @@ def test_the_rest_of_set_and_setup_still_goes_to_the_agent(world):
 def test_an_unbalanced_quote_in_a_calendar_command_is_not_handed_to_the_agent(world):
     typed = 'set calendar="cmd:mycal'
     assert commands.sets_calendar(typed) and commands.free_text(typed) == ""
+
+
+def test_nothing_shown_to_the_agent_names_the_command_line_that_sets_the_calendar(world):
+    from agenda_guardian.texts import tr
+
+    answer = world.tool("day_setup", {"settings": {"calendar": "cmd:mycal"}})
+    seen = [answer["result"], answer["for_agent"]] + [tr(lang, key) for lang in ("en", "fr")
+                                                       for key in ("calendar_user_only", "agent_calendar_user", "auto_cal_user")
+                                                       if key != "agent_calendar_user" or lang == "en"]
+    assert all("hermes guardian" not in text and "terminal" not in text for text in seen), seen
+    assert "/day set calendar=" in answer["for_agent"]  # the user still learns what to type

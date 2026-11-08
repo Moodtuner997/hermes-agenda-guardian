@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -219,9 +220,23 @@ def parse_ics(text: str, day: date, tzname: str = "", warnings: list[str] | None
 
 # --- fetching --------------------------------------------------------------------------------------------
 
-def _run_json(argv: list[str], run) -> object:
+_CHILD_ENV = ("PATH", "HOME", "LANG", "TZ")
+_CHILD_ENV_WINDOWS = ("SYSTEMROOT", "TEMP", "TMP", "USERPROFILE", "PATHEXT", "COMSPEC")  # no sockets without SYSTEMROOT
+
+
+def _child_env(home: Path, environ=None, windows: bool | None = None) -> dict[str, str]:
+    """What a calendar program starts with: the basics it needs to run and the profile folder, nothing else. The
+    parent holds every provider key of Hermes; a program the user (or the Google skill) names has no use for them."""
+    environ = os.environ if environ is None else environ
+    keep = _CHILD_ENV + (_CHILD_ENV_WINDOWS if (os.name == "nt" if windows is None else windows) else ())
+    env = {key: value for key, value in environ.items() if key in keep or key.startswith("LC_")}
+    env["HERMES_HOME"] = str(home)
+    return env
+
+
+def _run_json(argv: list[str], run, home: Path) -> object:
     try:
-        done = run(argv, capture_output=True, text=True, timeout=TIMEOUT, shell=False)
+        done = run(argv, capture_output=True, text=True, timeout=TIMEOUT, shell=False, env=_child_env(home))
     except FileNotFoundError:
         raise SourceError(f"calendar program not found: {argv[0]}")
     except subprocess.TimeoutExpired:
@@ -271,7 +286,7 @@ def fetch_range(profile: dict, first: date, last: date, home: Path, *, run=subpr
             argv = google_argv(home, "calendar", "list", "--start", start_iso, "--end", end_iso, "--max", str(limit))
         else:
             argv = [a.replace("{start}", start_iso).replace("{end}", end_iso) for a in source["argv"]]
-        data = _run_json(argv, run)
+        data = _run_json(argv, run, home)
         events = _json_events(data, tzname)
         if kind == "google" and isinstance(data, list) and len(data) >= limit and first != last:
             warnings.append(tr(lang, "range_cut", n=limit))

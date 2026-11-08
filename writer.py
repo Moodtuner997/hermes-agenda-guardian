@@ -30,7 +30,7 @@ def create(home: Path, tzname: str, calendar_id: str, summary: str, start: datet
     argv = sources.google_argv(
         home, "calendar", "create", "--summary", summary, "--start", sources._aware(start, tzname).isoformat(),
         "--end", sources._aware(end, tzname).isoformat(), "--description", description, "--calendar", calendar_id)
-    data = sources._run_json(argv, run)
+    data = sources._run_json(argv, run, home)
     if not isinstance(data, dict) or not data.get("id"):
         raise sources.SourceError("the calendar did not return an event id")
     return str(data["id"]), str(data.get("htmlLink", ""))
@@ -39,7 +39,7 @@ def create(home: Path, tzname: str, calendar_id: str, summary: str, start: datet
 def _live(home: Path, tzname: str, calendar_id: str, day_start: datetime, day_end: datetime, run) -> dict[str, dict]:
     argv = sources.google_argv(home, "calendar", "list", "--start", sources.iso_utc(day_start, tzname),
                                "--end", sources.iso_utc(day_end, tzname), "--max", "100", "--calendar", calendar_id)
-    data = sources._run_json(argv, run)
+    data = sources._run_json(argv, run, home)
     return {str(e.get("id")): e for e in data if isinstance(e, dict)} if isinstance(data, list) else {}
 
 
@@ -60,6 +60,6 @@ def remove(conn, home: Path, tzname: str, event_id: str, now: datetime, run=subp
         store.mark_removed(conn, event_id, "rewritten", now)
         return "rewritten"
     argv = sources.google_argv(home, "calendar", "delete", event_id, "--calendar", row["calendar_id"])
-    sources._run_json(argv, run)
+    sources._run_json(argv, run, home)
     store.mark_removed(conn, event_id, "deleted", now)
     return "deleted"

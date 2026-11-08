@@ -301,7 +301,10 @@ Hermes config (the rule Hermes applies to its own `cronjob` tools; an unreadable
   and an end-to-end run with real tool calls, real cron creation and Hermes' own script runner. On Windows, one
   real agent turn (Claude subscription provider) turned the schedule on through `day_schedule` and Hermes listed
   the two script-only jobs; the slash command, the CLI and the dashboard tab were exercised there too.
-  macOS is untested.
+- Every push and pull request runs the unit tests on Linux, Windows and macOS (GitHub-hosted `ubuntu-latest`,
+  `windows-latest`, `macos-latest`), then installs Hermes 0.22.7 from its lockfile, runs `hermes plugins validate
+  --install-deps` and the same end-to-end script on each. The approval prompt a human sees when the guard asks is
+  not exercised there: the end-to-end run replaces Hermes' gate with a recorder.
 - Delivery of the brief and reminders to a messaging platform (Telegram, WhatsApp...) rides on Hermes' own cron
   `deliver` and is not tested here: the end-to-end run creates the jobs and runs their scripts with Hermes' script
   runner, with the default local target.

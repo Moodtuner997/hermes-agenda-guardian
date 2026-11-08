@@ -41,7 +41,9 @@ ni un agenda particulier.
   `HERMES_HOME` jetable : un dossier avec `config.yaml` qui active le plugin et une copie du plugin).
 - README, PR et textes publics en anglais ; commits en français, format conventionnel.
 - Jamais de données réelles dans le dépôt : la démo vient de `tests/make_demo_profile.py` (noms inventés).
-- `platforms:` du catalogue = ce qui est réellement testé (Windows 11 et Linux arm64 ; macOS non testé).
+- `platforms:` du catalogue = ce qui est réellement testé : Windows 11, Linux arm64 et, depuis le 8/11, la CI GitHub
+  (`.github/workflows/ci.yml` : pytest, `hermes plugins validate` et `tests/e2e_hermes.py` sur ubuntu, windows et
+  macos-latest, Hermes v0.22.7 installé par `uv sync --locked`) ; une version ne s'annonce macOS que si ce job est vert.
 
 ## Pièges
 - Le dossier du dépôt n'est pas importable (tiret) : les tests chargent le paquet sous `agenda_guardian` ; les scripts
@@ -102,6 +104,13 @@ ni un agenda particulier.
   `tools.approval.request_tool_approval` par un enregistreur : l'invite interactive elle-même n'est pas exercée (avec
   `HERMES_INTERACTIVE=1` et sans terminal elle attendrait sur stdin). Le garde ne couvre pas les écritures Google des
   autres outils : décision de Théo si on veut l'étendre.
-- Non prouvé : la 0.5.0 sur Telegram (crochet sur une vraie passerelle, agent qui appelle `day_week_plan` avec un
-  chiffre supposé au lieu de questionner ou d'écrire à la main), question de durée envoyée par le cron, livraison
-  Telegram/WhatsApp, macOS.
+- Prouvé le 8/11 : le crochet `pre_gateway_dispatch` dans une vraie passerelle (Hermes 0.22.7, adaptateur IRC local, même
+  entrée que Telegram dans `run_inbound.py`, vue dans la source, pas essayée sur Telegram) : `/day place deux séances…`
+  réécrit puis `day_week_plan` appelé, `/day plan demain` et `/day set calendar=cmd:…` répondus par le répartiteur sans
+  agent, écriture jamais activée. Un webhook ne peut pas porter un texte commençant par `/` (refus d'admission avant le
+  crochet). La question de durée du job de rappel passe par `cron.scheduler.run_job` (e2e). macOS : CI verte (29 contrôles
+  de l'e2e, validate, pytest) sur macos-latest arm64.
+- Non prouvé : le crochet sur Telegram même, la 0.5.x sur le téléphone de Théo, l'invite d'approbation interactive du garde
+  vue par un humain, la livraison Telegram/WhatsApp du rappel. Défaut vu : `/day set calendar="cmd:programme arg"` tapé dans
+  le chat est refusé (« is not key=value ») car le découpage coupe au premier espace ; la forme `/day set
+  "calendar=cmd:programme arg"` ou la CLI passe (ticket, pas corrigé : hors des quatre demandes).

@@ -41,6 +41,26 @@ ROUTES = [  # (tool, arguments, route)
     ("terminal", {"command": "hermes guardian ^\n set calendar=cmd:x"}, "calendar"),
     ("terminal", {"command": "hermes guardian setup \\\n auto"}, "calendar"),
     ("write_file", {"path": f"{HOME}/scripts/agenda-guardian-nudge.py", "content": "print(1)"}, "storage"),
+    # a one-character escape the shell drops: bash \, cmd.exe ^ (ticket 8)
+    ("terminal", {"command": r"hermes guardian set calendar\=cmd:x"}, "calendar"),
+    ("terminal", {"command": "hermes guardian set calendar^=cmd:x"}, "calendar"),
+    ("terminal", {"command": r"hermes guardian s\et calendar=cmd:x"}, "calendar"),
+    ("terminal", {"command": r"hermes g\uardian set \calendar=cmd:x"}, "calendar"),
+    ("terminal", {"command": r"hermes guardian set 'calendar'\=cmd:x"}, "calendar"),
+    ("terminal", {"command": r"hermes guardian setup au\to"}, "calendar"),
+    ("terminal", {"command": r"ls plugin\-data/agenda-guardian"}, "storage"),
+    ("terminal", {"command": r"cat plugins/agenda\-guardian/README.md"}, "storage"),
+    # a separator handed over inside a word does not end the command (review of 0.5.3): the CLI then sets two pairs
+    ("terminal", {"command": r"hermes guardian set \;= calendar=cmd:x"}, "calendar"),
+    ("terminal", {"command": r"hermes guardian set \|= calendar=cmd:x"}, "calendar"),
+    ("terminal", {"command": r"hermes guardian set \&= calendar=cmd:x"}, "calendar"),
+    ("terminal", {"command": "hermes guardian set ^&= calendar=cmd:x"}, "calendar"),
+    ("terminal", {"command": "hermes guardian set ';=' calendar=cmd:x"}, "calendar"),
+    ("terminal", {"command": 'hermes guardian set "a|b=1" calendar=cmd:x'}, "calendar"),
+    # a continuation inside a word is joined with nothing, as bash joins it
+    ("terminal", {"command": "hermes guardian set calen\\\ndar=cmd:x"}, "calendar"),
+    ("terminal", {"command": "hermes guardian set calen^\r\ndar=cmd:x"}, "calendar"),
+    ("terminal", {"command": "hermes guardian se\\\nt calendar=cmd:x"}, "calendar"),
 ]
 THROUGH = [
     ("terminal", {"command": "hermes guardian plan"}),
@@ -64,6 +84,15 @@ THROUGH = [
     ("execute_code", {"code": "firewall.set_rules(rules)"}),
     ("terminal", {"command": r"cd C:\src\hermes-plugins\agenda-guardian && git status"}),
     ("terminal", {"command": "git status", "workdir": "/home/me/hermes-plugins/agenda-guardian"}),
+    # an escape that is not in front of the calendar key does not make a road
+    ("terminal", {"command": r"hermes guardian set work_hours=09:00-17:00 buffer_min\=5"}),
+    ("terminal", {"command": "hermes guardian set work_hours^=09:00-17:00"}),
+    ("terminal", {"command": r"cd C:\src\hermes-plugins\agenda-guardian\tests && dir"}),
+    ("terminal", {"command": r"echo 5^2 and a\=b"}),
+    # a real separator still ends the command: what follows it is another command
+    ("terminal", {"command": "hermes guardian set work_hours=09:00-17:00; echo calendar=cmd:x"}),
+    ("terminal", {"command": "hermes guardian set work_hours=09:00-17:00 && echo calendar=cmd:x"}),
+    ("terminal", {"command": "hermes guardian plan | grep calendar=x"}),
 ]
 
 
@@ -150,20 +179,29 @@ LONG = {  # about 260 KB each
     "guardian-then-hermes": "guardian " + "hermes " * 35000, "guardian-then-dots": "guardian " + "hermes." * 35000,
     "road-at-the-end": "hermes " * 20000 + "hermes guardian set calendar=cmd:x", "plugins-words": "plugins/" * 30000,
     "plugins-slashes": "plugins" + "/" * 200000,
+    "escapes": "\\^" * 130000, "escaped-words": "hermes\\x guardian\\x " * 13000,
+    "escaped-road-at-the-end": "\\^hermes " * 28000 + "hermes guardian set calendar\\=cmd:x",
+    # shapes the independent review of 0.5.3 measured as the slowest (three readings each sweep 200 characters)
+    "guardian-then-hermes-then-escape": "guardian " + "hermes " * 37000 + "\\x",
+    "guardian-then-escaped-hermes": "guardian " + "h\\ermes " * 32000,
+    "joined-words": "calen\\\ndar " * 25000,
+    "quoted-spans": ("'" + "x" * 150 + '"') * 1700, "quotes-and-separators": "'a;b' " * 40000,
+    "escaped-separators": "hermes guardian \\; " * 14000,
 }
 
 
 @pytest.mark.parametrize("raw", LONG.values(), ids=LONG.keys())
 def test_a_very_long_call_is_matched_in_a_fraction_of_a_second(raw):
     """Hermes blocks a pre_tool_call that overruns its timeout and re holds the GIL, so a quadratic pattern would
-    freeze every tool (measured on the first 0.5.2 patterns: 3 s at 78 KB, 67 s at 260 KB; now 0.6 s at worst)."""
+    freeze every tool (measured on the first 0.5.2 patterns: 3 s at 78 KB, 67 s at 260 KB; now under 3 s at worst, with two 260 KB fields)."""
     import time
 
     for tool, field in (("terminal", "command"), ("execute_code", "code"), ("patch", "patch")):
         started = time.perf_counter()
         guard.check(tool, {field: raw})
-        assert time.perf_counter() - started < 5.0, (tool, raw[:30])  # 0.6 s worst measured; the old patterns took minutes
+        assert time.perf_counter() - started < 5.0, (tool, raw[:30])  # 2.7 s worst measured (two 252 KB fields); the old patterns took minutes
     assert guard.check("terminal", {"command": "hermes " * 20000 + "hermes guardian set calendar=cmd:x"})["action"] == "approve"
+    assert guard.check("terminal", {"command": LONG["escaped-road-at-the-end"]})["action"] == "approve"
 
 
 def test_the_hook_is_registered_declared_and_cannot_stop_the_agent_when_it_fails(monkeypatch):

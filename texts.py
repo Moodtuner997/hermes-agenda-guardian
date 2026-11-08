@@ -33,6 +33,15 @@ EN = {
     "set_nothing": "Nothing to set. Example: /day set work_hours=09:00-17:30",
     "set_ok": "ok  {line}",
     "set_refused": "refused  {key}: {why}",
+    "calendar_user_only": "the calendar source is yours to choose, an assistant cannot set it: type /day set "
+                          "calendar=<google, ics:<https URL or file>, file:<json file>, cmd:<program>, or none> "
+                          "yourself, or run hermes guardian set calendar=<source> in a terminal",
+    "agent_calendar_user": "For the agent: the calendar source decides which program or address is run or read on "
+                           "every plan, so no tool ever sets it, whatever the value (google, ics:, file:, cmd:, "
+                           "none). Tell the user, in their language and plain words, to type it themselves: "
+                           "/day set calendar=<source> in the chat (or hermes guardian set calendar=<source> in a "
+                           "terminal); to take the Google calendar this profile already has, /day setup auto. Do "
+                           "not retry with another spelling or another tool.",
     "no_rules_warning": "None of your planning rules are set yet, so defaults are used. Run /day setup.",
     "cal_unreadable": "Calendar unreadable ({why}): the plan ignores your meetings.",
     "add_name": 'Give the task a name: /day add "Write the quote" 45m',
@@ -152,11 +161,15 @@ Two commands you type yourself:
     "auto_done": "Adopted from your Hermes profile:",
     "auto_nothing": "Nothing more to adopt: everything found is already set.",
     "auto_skip_cal": "Calendar not adopted: {why}",
+    "auto_cal_user": "Calendar left to you: type /day setup auto yourself to adopt it (an assistant cannot set the "
+                     "calendar source).",
     "agent_hint": "For the agent: before asking the user anything, use what you already know of them (memory, "
                   "profile notes, existing reminders, connected calendar) to propose each answer, then ask only to "
                   "confirm or complete. Speak the user's language, in plain sentences: never show the key=value "
                   "names or any command syntax, and turn loose answers (9h30, from 9 to 7, lunch around 1) into the "
-                  "settings yourself. Save answers with the 'settings' argument.",
+                  "settings yourself. Save answers with the 'settings' argument. The calendar source is the one "
+                  "setting you never save: when the profile shows a ready Google calendar, tell the user to type "
+                  "/day setup auto; for any other source, /day set calendar=<source> (they type it themselves).",
     "unnamed": "(unnamed)",
     "found_google_nosignin": "[!!] Google Calendar: the google-workspace skill is installed but not signed in yet "
                              "(run its own setup first)",
@@ -192,6 +205,9 @@ FR = {
     "set_nothing": "Rien à régler. Exemple : /day set work_hours=09:00-17:30",
     "set_ok": "ok  {line}",
     "set_refused": "refusé  {key} : {why}",
+    "calendar_user_only": "la source d'agenda, c'est toi qui la choisis, un assistant ne peut pas la régler : tape "
+                          "toi-même /day set calendar=<google, ics:<URL https ou fichier>, file:<fichier json>, "
+                          "cmd:<programme>, ou none>, ou lance hermes guardian set calendar=<source> dans un terminal",
     "no_rules_warning": "Aucune de tes règles n'est encore réglée : les valeurs par défaut servent. "
                         "Lance /day setup.",
     "cal_unreadable": "Agenda illisible ({why}) : le plan ignore tes réunions.",
@@ -312,6 +328,8 @@ Deux commandes que tu tapes toi-même :
     "auto_done": "Repris de ton profil Hermes :",
     "auto_nothing": "Rien de plus à reprendre : tout ce qui a été trouvé est déjà réglé.",
     "auto_skip_cal": "Agenda non repris : {why}",
+    "auto_cal_user": "Agenda laissé à toi : tape toi-même /day setup auto pour le reprendre (un assistant ne peut "
+                     "pas régler la source d'agenda).",
     "unnamed": "(sans nom)",
     "found_google_nosignin": "[!!] Google Agenda : la compétence google-workspace est installée mais pas encore "
                              "connectée (lance d'abord son propre réglage)",

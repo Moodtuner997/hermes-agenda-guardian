@@ -122,7 +122,7 @@ def test_setup_tool_gives_the_agent_the_facts(tmp_path, monkeypatch):
     ctx = Ctx()
     ag.register(ctx)
     answer = json.loads(ctx.tools["day_setup"]({}))
-    assert answer["found"]["google_calendar"] == "ready" and answer["found"]["can_adopt"]["calendar"] == "google"
+    assert answer["found"]["google_calendar"] == "ready" and "calendar" not in answer["found"]["can_adopt"]
     assert "propose each answer" in answer["for_agent"]
 
 

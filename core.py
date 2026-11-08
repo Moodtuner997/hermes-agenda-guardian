@@ -95,11 +95,12 @@ class Guardian(AgendaMixin):
         return self.profile()["language"]
 
     # --- rules -------------------------------------------------------------------------------------------
-    def set_rules(self, pairs: list[tuple[str, str]]) -> str:
+    def set_rules(self, pairs: list[tuple[str, str]], *, from_tool: bool = False) -> str:
         profile, lines = self.profile(), []
         for key, value in pairs:
             try:
-                lines.append(tr(profile["language"], "set_ok", line=prof.apply_setting(profile, key, value, self.now().date())))
+                lines.append(tr(profile["language"], "set_ok", line=prof.apply_setting(
+                    profile, key, value, self.now().date(), from_tool=from_tool)))
             except ValueError as exc:
                 lines.append(tr(profile["language"], "set_refused", key=key, why=exc))
         store.save_profile(self.conn, profile)
@@ -133,7 +134,8 @@ class Guardian(AgendaMixin):
         p, found = self.profile(), self.detect()
         return {"language": p["language"], "timezone": p["timezone"], "google_calendar": found["google"],
                 "calendar": p["calendar"]["type"], "other_reminders": [f"{n} ({s})" for n, s in found["jobs"]],
-                "can_adopt": self._adoptable(p, found), "rules_set_by_user": sorted(p["_set"])}
+                "can_adopt": {k: v for k, v in self._adoptable(p, found).items() if k != "calendar"},
+                "rules_set_by_user": sorted(p["_set"])}
 
     def setup_text(self) -> str:
         p, found = self.profile(), self.detect()
@@ -182,11 +184,15 @@ class Guardian(AgendaMixin):
                 "", T("next_steps")]
         return "\n".join(out)
 
-    def setup_auto(self) -> str:
-        """Adopt what the Hermes profile already says: language, time zone and a working Google calendar."""
+    def setup_auto(self, *, from_tool: bool = False) -> str:
+        """Adopt what the Hermes profile already says: language, time zone and a working Google calendar.
+        From an agent tool the calendar is left to the user: only their typed command adopts it."""
         p, found = self.profile(), self.detect()
         lang = p["language"]
         todo, skipped = self._adoptable(p, found), ""
+        if from_tool and "calendar" in todo:
+            del todo["calendar"]
+            skipped = tr(lang, "auto_cal_user")
         if "calendar" in todo:
             ok, detail = self._probe(dict(p, calendar={"type": "google"}))
             if not ok:

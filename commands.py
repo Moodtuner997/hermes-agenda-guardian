@@ -6,12 +6,14 @@ import re
 import shlex
 
 from .core import Guardian, UserError, parse_day, parse_minutes
+from .profile import normal_key
 from .texts import tr
 
 _DURATION = re.compile(r"^\d+(h(\d+)?|m|min)?$|^\d+h\d*m?$", re.I)
 
 # Commands that need no format: the dispatcher answers them. After /day anything else is a request in plain words
 # (a sentence, a fragment, or a syntax nobody should have to learn): the gateway hook hands it to the agent.
+# One exception, see ``sets_calendar``: the commands that fix the calendar source are answered by the dispatcher too.
 DIRECT = frozenset({"help", "list", "ls", "tasks", "plan", "now", "brief", "nudge", "ok", "confirm", "undo", "write",
                     "cron"})
 KNOWN = DIRECT | frozenset({"setup", "set", "add", "done", "drop", "rm", "kind", "habit", "propose", "took"})
@@ -20,7 +22,7 @@ KNOWN = DIRECT | frozenset({"setup", "set", "add", "done", "drop", "rm", "kind",
 def free_text(raw: str) -> str:
     """What follows /day when it is not one of the format-free commands: the request to hand to the agent (else "")."""
     words = (raw or "").split()
-    if not words or words[0].lower().lstrip("-") in DIRECT:
+    if not words or words[0].lower().lstrip("-") in DIRECT or sets_calendar(raw):
         return ""
     return " ".join(words)
 
@@ -31,6 +33,21 @@ def _tokens(raw: str, lang: str) -> list[str]:
     except ValueError as exc:
         raise UserError(tr(lang, "quote", why=exc))
     return [t[1:-1] if len(t) >= 2 and t[0] == t[-1] and t[0] in "\"'" else t for t in tokens]
+
+
+def sets_calendar(raw: str) -> bool:
+    """``set ... calendar=<source>`` and ``setup auto`` (which adopts a Google calendar) typed by the user.
+    An agent tool never sets the calendar source (it names a program or an address run on every plan), so these two
+    are answered by the dispatcher itself: through the agent they would hit the same refusal. Keys are read the way
+    ``profile.apply_setting`` reads them, so no spelling slips past this test into the agent's hands."""
+    try:
+        tokens = _tokens(raw or "", "en")
+    except UserError:
+        tokens = (raw or "").split()
+    head = tokens[0].lower() if tokens else ""
+    if head == "set":
+        return any(normal_key(token.partition("=")[0]) == "calendar" for token in tokens[1:] if "=" in token)
+    return head == "setup" and len(tokens) > 1 and tokens[1].lower() == "auto"
 
 
 def _add(guardian: Guardian, args: list[str]) -> str:

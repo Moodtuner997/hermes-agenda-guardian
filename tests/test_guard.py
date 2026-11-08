@@ -34,6 +34,13 @@ ROUTES = [  # (tool, arguments, route)
      "storage"),
     ("patch", {"mode": "patch", "patch": "*** Begin Patch\n*** Update File: plugins/agenda-guardian/core.py\n*** End Patch"},
      "storage"),
+    # the same road in other obvious spellings: quoted key, line continuations of three shells, a scripts file
+    ("terminal", {"command": "hermes guardian set 'calendar'=cmd:x"}, "calendar"),
+    ("terminal", {"command": 'hermes guardian set "calendar"="cmd:x"'}, "calendar"),
+    ("terminal", {"command": "hermes guardian \\\n  set calendar=cmd:x"}, "calendar"),
+    ("terminal", {"command": "hermes guardian ^\n set calendar=cmd:x"}, "calendar"),
+    ("terminal", {"command": "hermes guardian setup \\\n auto"}, "calendar"),
+    ("write_file", {"path": f"{HOME}/scripts/agenda-guardian-nudge.py", "content": "print(1)"}, "storage"),
 ]
 THROUGH = [
     ("terminal", {"command": "hermes guardian plan"}),
@@ -51,6 +58,12 @@ THROUGH = [
     ("day_setup", {"settings": {"calendar": "cmd:x"}}),  # the plugin's own tool refuses it itself
     ("day_schedule", {"action": "on"}),
     ("cronjob_manage", {"action": "create", "script": "agenda-guardian-nudge.py", "name": "agenda-guardian-nudge"}),
+    # ordinary work that only shares a word with the plugin
+    ("terminal", {"command": "grep -rn save_profile src/"}),
+    ("terminal", {"command": "git log --grep=apply_setting"}),
+    ("execute_code", {"code": "firewall.set_rules(rules)"}),
+    ("terminal", {"command": r"cd C:\src\hermes-plugins\agenda-guardian && git status"}),
+    ("terminal", {"command": "git status", "workdir": "/home/me/hermes-plugins/agenda-guardian"}),
 ]
 
 
@@ -89,13 +102,68 @@ def test_a_cron_run_still_lets_the_innocent_calls_through(monkeypatch):
 
 
 def test_the_approval_rule_is_one_per_exact_call_never_plugin_wide():
-    keys = {guard.check("terminal", {"command": f"hermes guardian set calendar=cmd:prog{i}"})["rule_key"]
-            for i in range(5)}
+    key = lambda tool, args: guard.check(tool, args)["rule_key"]
+    keys = {key("terminal", {"command": f"hermes guardian set calendar=cmd:prog{i}"}) for i in range(5)}
     assert len(keys) == 5
-    same = {guard.check("terminal", {"command": "hermes guardian set  calendar=cmd:prog"})["rule_key"],
-            guard.check("terminal", {"command": 'hermes guardian set "calendar=cmd:prog"'})["rule_key"]}
-    assert len(same) == 1  # the same call spelled with other spacing or quotes is the same rule
-    assert all(key.count(":") == 2 and len(key.split(":")[2]) == 12 for key in keys | same)
+    call = {"command": "hermes guardian set calendar=cmd:prog"}
+    assert key("terminal", call) == key("terminal", dict(call))  # the same call is the same rule
+    # another spelling, another list, another content: another rule, so one "always" never covers a different call
+    assert len({key("terminal", call), key("terminal", {"command": "hermes guardian set  calendar=cmd:prog"}),
+                key("terminal", {"command": "hermes guardian set calendar=cmd:prog,arg"}),
+                key("terminal", {"command": "hermes guardian set calendar=cmd:prog arg"}),
+                key("terminal", {"command": "hermes guardian set calendar=cmd:prog(arg)"})}) == 5
+    path = f"{HOME}/plugin-data/agenda-guardian/x"
+    assert key("write_file", {"path": path, "content": '{"calendar": "google"}'}) != key(
+        "write_file", {"path": path, "content": '{"calendar": "cmd:evil.sh"}'})
+    patch = {"path": f"{HOME}/plugins/agenda-guardian/core.py", "old_string": "a", "new_string": "b"}
+    assert key("patch", patch) != key("patch", {**patch, "new_string": "c"})
+    assert all(k.count(":") == 2 and len(k.split(":")[2]) == 12 for k in keys)
+
+
+def test_what_would_be_written_is_shown_to_the_human():
+    path = f"{HOME}/plugin-data/agenda-guardian/x"
+    message = guard.check("write_file", {"path": path, "content": '{"calendar": "cmd:evil.sh"}'})["message"]
+    assert path in message and "[content]" in message and "cmd:evil.sh" in message
+    message = guard.check("patch", {"path": f"{HOME}/plugins/agenda-guardian/core.py", "old_string": "x = 1",
+                                    "new_string": "x = evil()"})["message"]
+    assert "[old_string] x = 1" in message and "[new_string] x = evil()" in message
+    message = guard.check("write_file", {"path": path, "content": "z" * 500})["message"]
+    assert "z" * 200 in message and "z" * 201 not in message and "[…]" in message
+
+
+def test_a_long_call_cannot_hide_the_matching_part_past_the_cut():
+    road = 'os.system("hermes guardian set calendar=cmd:evil.sh")'
+    long_code = "import os\n" + "# padding\n" * 80 + road
+    message = guard.check("execute_code", {"code": long_code})["message"]
+    assert "cmd:evil.sh" in message and message.count("# padding") < 80
+    second = "hermes guardian set calendar=google" + " " * 400 + "; hermes guardian set calendar=cmd:evil.sh"
+    message = guard.check("terminal", {"command": second})["message"]
+    assert "calendar=google" in message and "cmd:evil.sh" in message
+    short = {"command": "hermes guardian set calendar=cmd:mycal"}
+    assert guard.check("terminal", short)["message"].count("hermes guardian set calendar=cmd:mycal") == 2  # en + fr
+
+
+LONG = {  # about 260 KB each
+    "hermes-words": "hermes " * 35000, "hermes-dots": "hermes." * 35000, "guardian-plan": "hermes guardian plan " * 12000,
+    "guardian-set": "hermes guardian set " * 12000,
+    "imports": "".join(f"from hermes_cli.m{i} import t{i}\n" for i in range(9000)),
+    "guardian-then-hermes": "guardian " + "hermes " * 35000, "guardian-then-dots": "guardian " + "hermes." * 35000,
+    "road-at-the-end": "hermes " * 20000 + "hermes guardian set calendar=cmd:x", "plugins-words": "plugins/" * 30000,
+    "plugins-slashes": "plugins" + "/" * 200000,
+}
+
+
+@pytest.mark.parametrize("raw", LONG.values(), ids=LONG.keys())
+def test_a_very_long_call_is_matched_in_a_fraction_of_a_second(raw):
+    """Hermes blocks a pre_tool_call that overruns its timeout and re holds the GIL, so a quadratic pattern would
+    freeze every tool (measured on the first 0.5.2 patterns: 3 s at 78 KB, 67 s at 260 KB; now 0.6 s at worst)."""
+    import time
+
+    for tool, field in (("terminal", "command"), ("execute_code", "code"), ("patch", "patch")):
+        started = time.perf_counter()
+        guard.check(tool, {field: raw})
+        assert time.perf_counter() - started < 5.0, (tool, raw[:30])  # 0.6 s worst measured; the old patterns took minutes
+    assert guard.check("terminal", {"command": "hermes " * 20000 + "hermes guardian set calendar=cmd:x"})["action"] == "approve"
 
 
 def test_the_hook_is_registered_declared_and_cannot_stop_the_agent_when_it_fails(monkeypatch):
@@ -116,7 +184,7 @@ def test_the_hook_is_registered_declared_and_cannot_stop_the_agent_when_it_fails
     assert ctx.hooks["pre_tool_call"](tool_name="terminal", args={"command": "hermes guardian set calendar=cmd:x"}) is None
 
 
-def test_an_older_hermes_without_the_hook_still_loads_the_plugin():
+def test_a_register_hook_that_refuses_the_name_does_not_stop_the_plugin_loading():
     class Old(Ctx):
         def register_hook(self, name, callback, **kw):
             if name == "pre_tool_call":
@@ -135,5 +203,8 @@ def test_what_the_guard_cannot_see_is_not_pretended_to_be_closed():
         ("terminal", {"command": "echo aGVybWVzIGd1YXJkaWFuIHNldCBjYWxlbmRhcj1jbWQ6eA== | base64 -d | sh"}),
         ("terminal", {"command": "g=guard; hermes ${g}ian set calendar=cmd:x"}),
         ("execute_code", {"code": "p = 'plugin' + '-data/agenda' + '-guardian'; open(p + '/gu' + 'ardian.db', 'wb')"}),
+        # written first, run later: the content of a file is shown to the human but not scanned
+        ("write_file", {"path": "/tmp/x.sh", "content": "hermes guardian set calendar=cmd:x"}),
+        ("terminal", {"command": "ls", "workdir": f"{HOME}/plugins/./agenda-guardian"}),
     ]
     assert all(guard.check(tool, args) is None for tool, args in hidden)

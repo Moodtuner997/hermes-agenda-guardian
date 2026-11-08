@@ -17,7 +17,8 @@ description: >
   Google calendar is off until you type /day write on; then it adds events marked as its own, only after you
   say yes, and removes only those; plans the agent composes go through the same road. A /day message that is not one of
   the few format-free commands is handed to the agent. Only you set the calendar source; when the agent's terminal,
-  code or file tools take an obvious side road to it, Hermes asks you first. Deterministic, no model call.
+  code or file tools take an obvious side road to it, the call goes to Hermes' own approval prompt. Deterministic,
+  no model call.
 requires_hermes: ">=0.22.7"
 provides_tools:
   - day_setup

@@ -191,17 +191,23 @@ chat (the plugin answers that command itself, it never goes through the agent), 
 in a terminal; `/day setup auto` adopts a working Google calendar the same way.
 
 - **Side roads, guarded since 0.5.2.** A `pre_tool_call` hook looks at the arguments of four tools, `terminal`,
-  `execute_code`, `write_file` and `patch`, and sends the call to Hermes' own approval gate (one rule per exact call,
-  never a plugin-wide "always") when it is: `hermes ... guardian` followed by `set ... calendar=...` or `setup auto`;
-  a call to the package's `apply_setting`, `set_rules`, `setup_auto` or `save_profile`; or any mention of the
-  plugin's folders (`plugins/agenda-guardian`, `plugin-data/agenda-guardian`) or of its database `guardian.db`
-  (a read from the terminal asks too; `read_file` and `search_files` are not watched). In a cron run nobody can
-  answer, so the call is refused. **This is not a security boundary.** A call that hides what it does (base64, a path
-  built in pieces, another interpreter) is not recognised, and the agent's terminal already runs under Hermes' own
-  approvals. The guard closes the obvious roads and puts a human on the one that would leave a program run at every
-  plan without Hermes knowing. An error in the matcher lets the call through, so the guard can never block the
-  agent's terminal by itself. It needs Hermes 0.22.7 or later (`approve` exists in 0.22.7 and 0.23.0); an older one
-  loads the plugin without it.
+  `execute_code`, `write_file` and `patch`, and sends the call to Hermes' own approval gate when it is: `hermes ...
+  guardian` followed by `set ... calendar=...` or `setup auto` (quotes and line continuations are read the way a
+  shell reads them); a call to the package's `apply_setting`, `set_rules` or `save_profile` that mentions
+  `calendar`, or to `setup_auto` or `agenda_guardian`; or a mention of the plugin's folders (`plugins/`,
+  `plugin-data/` or `scripts/` followed by `agenda-guardian`) or of its database `guardian.db` (a read from the
+  terminal asks too; `read_file` and `search_files` are not watched). The prompt shows the whole call when it is
+  short, otherwise its start and every part that matched, and for `write_file` and `patch` the content that would be
+  written. The rule key hashes the whole call, content included, so an "always" answer covers that exact call and
+  nothing else. In a cron run nobody can answer, so the call is refused. **This is not a security boundary.** A call
+  that hides what it does is not recognised: base64, a path built in pieces, another interpreter, a script written
+  with `write_file` and run later (the content is shown, not scanned), `plugins/./agenda-guardian`, a relative path
+  after an approved `cd`. The agent's terminal already runs under Hermes' own approvals, and under `approvals.mode:
+  off` or Hermes' yolo mode (`hermes -z` sets it) Hermes answers yes without asking, as it does for every call. The
+  guard closes the obvious roads and puts a person on the one that would leave a program run at every plan. It reads
+  no config and no file, its patterns are bounded (0.6 s at worst on a 260 KB call, measured in the tests; Hermes
+  blocks a `pre_tool_call` that runs past 30 s), and an error in the matcher lets the call through. It needs Hermes
+  0.22.7 or later (`requires_hermes` says so; `approve` exists in 0.22.7 and 0.23.0).
 
 - **ICS over the network:** `https://` only. The host is resolved and every address it answers with must be public
   (loopback, private, link-local including the cloud metadata address, carrier-grade NAT and reserved ranges are
@@ -334,7 +340,7 @@ Hermes config (the rule Hermes applies to its own `cronjob` tools; an unreadable
 ## Development
 
 ```
-python -m pytest tests -q                  # 330 tests, no Hermes needed
+python -m pytest tests -q                  # 359 tests, no Hermes needed
 hermes plugins validate .
 HERMES_HOME=<home> <hermes python> tests/e2e_hermes.py     # real tool calls, real cron, no model
 python tests/make_demo_profile.py --home <home>             # an invented day for screenshots

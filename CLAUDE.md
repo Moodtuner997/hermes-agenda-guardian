@@ -34,17 +34,18 @@ ni un agenda particulier.
   contenu d'un `write_file` ou d'un `patch`. Ce n'est pas une frontière de sécurité (commande masquée, script écrit puis
   lancé : non vus, dit dans le README) ; une erreur du filtre laisse passer l'appel. Les motifs sont bornés et
   `{0,40}+` est possessif (Python 3.11+, comme Hermes) : sans cela la regex est quadratique voire cubique et gèle tous les
-  outils (relecture du 8/11 : 67 s à 260 Ko ; maintenant 0,6 s au pire, test `LONG` de `test_guard.py`).
+  outils (relecture du 8/11 : 67 s à 260 Ko ; maintenant moins de 3 s au pire sur deux champs de 260 Ko, test `LONG` de `test_guard.py`).
 - Le programme d'agenda (script Google ou `cmd:`) démarre avec `sources._child_env` (PATH, HOME, locale, TZ,
   HERMES_HOME, plus le minimum Windows) : jamais une clé de fournisseur ni une variable de proxy.
 - ICS par URL : `https` seul, toute adresse résolue publique, connexion à l'adresse vérifiée, redirection vers le même
   hôte seulement, ni proxy ni http (`sources.safe_urlopen`, défaut de `fetch_*` et de `Guardian`) ; depuis la 0.5.3, une
   réponse de plus de 5 Mo est refusée (`MAX_ICS_BYTES`, lecture coupée à 5 Mo + 1 octet) et une adresse ou une redirection
-  dont la partie hôte porte un `\` (ou un `@` pour une redirection) est refusée : `urlsplit` et `http.client` la liraient
-  de deux façons.
+  dont la partie hôte porte un `\` (ou un `@` pour une redirection, aussi codé `%5C`) ou un port illisible est refusée
+  (`urlsplit` et `http.client` la liraient de deux façons) ; une réponse coupée (`Content-Length` non tenu, `response.length`
+  > 0) est une erreur visible, jamais un agenda vide.
 - `day_schedule` on/off est refusé dans une session de cron tant que `cron.allow_agent_scheduling` n'est pas vrai
   (config illisible = refus ; `status` reste permis).
-- Chaque modification passe `python -m pytest tests -q` (390 tests), `hermes plugins validate .`, puis, si le cron,
+- Chaque modification passe `python -m pytest tests -q` (427 tests), `hermes plugins validate .`, puis, si le cron,
   le tableau de bord, un outil ou le hook bougent, `tests/e2e_hermes.py` avec l'interpréteur de Hermes (dans un
   `HERMES_HOME` jetable : un dossier avec `config.yaml` qui active le plugin et une copie du plugin).
 - README, PR et textes publics en anglais ; commits en français, format conventionnel.
@@ -133,6 +134,10 @@ ni un agenda particulier.
 - Écarts mesurés le 8/11, fermés en 0.5.3 : le garde laissait passer `calendar\=cmd:x` (bash) et `calendar^=cmd:x`
   (cmd.exe), ticket #8 (troisième lecture de `guard.readings` sans les `\` et `^` suivis d'un caractère, ajoutée sans
   remplacer les deux autres : `plugins\agenda-guardian` reste un chemin Windows) ; la lecture ICS lisait toute la réponse
-  sans borne et une redirection avec `\@` était lue de deux façons, ticket #9. Restent ouverts : même sans espace,
+  sans borne et une redirection avec `\@` était lue de deux façons, ticket #9. La relecture indépendante de la PR 11 a
+  trouvé en plus, corrigés avant fusion : `hermes guardian set \;= calendar=cmd:x` (un séparateur échappé ou entre
+  guillemets coupait le motif `_CLI`, `commands.run` appliquait quand même la paire suivante : `guard._words` les masque),
+  `calen\<retour>dar=` (bash joint sans espace : troisième lecture jointe à rien) et une réponse coupée lue en silence.
+  Reste hors du garde, dit dans le README : les expansions (`calendar$@=`, `${x}`). Restent ouverts : même sans espace,
   `/day set calendar="file:C:\…"` est refusé, commentaire du ticket #7 ; la section de consigne système fait 1 582
   caractères en anglais et 1 760 en français (le README disait « environ 1 700 »).

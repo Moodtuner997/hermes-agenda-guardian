@@ -138,6 +138,7 @@ Two commands you type yourself:
                    "/day set calendar=google (or ics:<file or URL>), or run /day setup.",
     "ics_https_only": "The calendar URL must start with https:// (plain http is refused: anyone on the network could read or alter it)",
     "ics_too_big": "The calendar answered with more than {mb} MB: it is ignored, check the address",
+    "ics_cut": "The calendar answer was cut short on the way: it is ignored, try again",
     "recurring": "{n} recurring event(s) repeat monthly or yearly; only their first date is read, so later "
                  "repeats are missing from the plan",
     # --- setup -----------------------------------------------------------------------------------------------
@@ -316,6 +317,7 @@ Deux commandes que tu tapes toi-même :
                    "/day set calendar=google (ou ics:<fichier ou URL>), ou lance /day setup.",
     "ics_https_only": "L'URL de l'agenda doit commencer par https:// (le http simple est refusé : quiconque est sur le réseau pourrait la lire ou la modifier)",
     "ics_too_big": "L'agenda a répondu plus de {mb} Mo : il est ignoré, vérifie l'adresse",
+    "ics_cut": "La réponse de l'agenda a été coupée en route : elle est ignorée, réessaie",
     "recurring": "{n} événement(s) récurrent(s) se répètent chaque mois ou chaque année ; seule leur première date "
                  "est lue, les répétitions suivantes manquent donc au plan",
     "setup_title": "Réglage de l'agenda guardian - environ 3 minutes, tu pourras tout affiner plus tard",

@@ -288,6 +288,34 @@ def test_a_backslash_in_the_host_part_of_an_address_is_refused_before_any_name_i
     assert dns.asked == []
 
 
+@pytest.mark.parametrize("location", [
+    "https://evil.example%5C@calendar.example/x",  # the backslash percent-encoded: urlsplit keeps it, http.client decodes it
+    "https://evil.example%5c@calendar.example/x",
+    "https://calendar.example:443%5C/x",
+])
+def test_a_percent_encoded_backslash_in_a_redirect_host_part_is_refused(location):
+    with pytest.raises(urllib.error.URLError, match="refused"):
+        redirect("https://calendar.example/a.ics", location)
+
+
+@pytest.mark.parametrize("location", ["https://calendar.example:44%33/a.ics", "https://calendar.example:abc/a.ics",
+                                      "https://calendar.example:99999/a.ics"])
+def test_a_port_that_is_not_a_port_is_a_refusal_not_a_crash(location):
+    with pytest.raises(urllib.error.URLError, match="refused"):
+        redirect("https://calendar.example/a.ics", location)
+    dns = answers(PUBLIC)
+    with pytest.raises(urllib.error.URLError, match="not a number"):
+        run_hops_from(location, [(200, None)], dns)
+    assert dns.asked == []
+
+
+def test_a_percent_encoded_backslash_in_the_first_address_is_refused_before_any_name_is_resolved(no_socket):
+    dns = answers(PUBLIC)
+    with pytest.raises(urllib.error.URLError, match="backslash"):
+        run_hops_from("https://evil.example%5C@calendar.example/a.ics", [(200, None)], dns)
+    assert dns.asked == []
+
+
 def run_hops_from(url, answers_list, dns):
     Hops.script = SimpleNamespace(hops=[], answers=list(answers_list))
     return sources.build_opener(dns, https=Hops).open(urllib.request.Request(url), timeout=3)

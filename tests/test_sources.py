@@ -187,6 +187,32 @@ def test_an_ics_answer_of_exactly_the_limit_is_read(tmp_path):
     assert titles(events) == ["Birthday", "Stand, up"] and warnings == []
 
 
+class CutResponse(IcsResponse):
+    """A server that promised more bytes (Content-Length) than it sent before closing: http.client leaves ``length`` > 0."""
+
+    def __init__(self, owed):
+        self.length = owed
+
+    def read(self, size=-1):
+        return ICS.encode()[:100]
+
+
+@pytest.mark.parametrize("lang, said", [("en", "cut short"), ("fr", "coupée en route")])
+def test_an_answer_cut_short_is_refused_not_read_as_an_empty_calendar(tmp_path, lang, said):
+    profile = prof.new_profile()
+    profile["language"] = lang
+    profile["calendar"] = {"type": "ics", "path": "https://example.test/cal.ics"}
+    with pytest.raises(SourceError, match=said):
+        fetch_events(profile, MONDAY, tmp_path, urlopen=lambda request, timeout: CutResponse(900))
+
+
+def test_an_answer_that_delivered_all_it_promised_is_read(tmp_path):
+    profile = prof.new_profile()
+    profile["calendar"] = {"type": "ics", "path": "https://example.test/cal.ics"}
+    for owed in (0, None):
+        fetch_events(profile, MONDAY, tmp_path, urlopen=lambda request, timeout, owed=owed: CutResponse(owed))
+
+
 def test_the_too_big_answer_is_said_in_french_too(tmp_path):
     profile = prof.new_profile()
     profile["language"] = "fr"

@@ -333,9 +333,13 @@ class _CheckedHTTPS(urllib.request.HTTPSHandler):
 
     def https_open(self, req):
         parts = urllib.parse.urlsplit(req.full_url)
-        if "\\" in parts.netloc:  # urlsplit and http.client would read the host two ways: refuse what is read twice
+        if "\\" in urllib.parse.unquote(parts.netloc):  # urlsplit and http.client would read the host two ways
             raise urllib.error.URLError(f"address refused: a backslash in the host part of {parts.scheme}://{parts.netloc}")
-        addresses = verified_addresses(parts.hostname or "", parts.port or 443, self._getaddrinfo)
+        try:
+            port = parts.port
+        except ValueError:
+            raise urllib.error.URLError(f"address refused: the port of {parts.scheme}://{parts.netloc} is not a number")
+        addresses = verified_addresses(parts.hostname or "", port or 443, self._getaddrinfo)
         return self.do_open(lambda host, **kw: _CheckedConnection(host, addresses=addresses, context=self._context, **kw),
                             req)
 
@@ -346,10 +350,15 @@ class _SameHostRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         old = urllib.parse.urlsplit(req.full_url)
         new = urllib.parse.urlsplit(newurl)  # already joined to the old address by urllib
-        if "\\" in new.netloc or "@" in new.netloc:  # a user-info part or a backslash: the host is read two ways
+        decoded = urllib.parse.unquote(new.netloc)
+        if "\\" in decoded or "@" in decoded:  # a user-info part or a backslash: the host is read two ways
             raise urllib.error.URLError(f"redirect to {new.scheme}://{new.netloc} refused: odd characters in the host part")
+        try:
+            new_port, old_port = new.port, old.port
+        except ValueError:
+            raise urllib.error.URLError(f"redirect to {new.scheme}://{new.netloc} refused: the port is not a number")
         if (new.scheme != "https" or (new.hostname or "").lower() != (old.hostname or "").lower()
-                or (new.port or 443) != (old.port or 443)):
+                or (new_port or 443) != (old_port or 443)):
             raise urllib.error.URLError(f"redirect to {new.scheme}://{new.netloc} refused: only the same https host may answer")
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
@@ -427,8 +436,11 @@ def fetch_range(profile: dict, first: date, last: date, home: Path, *, run=subpr
                 request = urllib.request.Request(location, headers={"User-Agent": "hermes-agenda-guardian"})
                 with urlopen(request, timeout=TIMEOUT) as response:
                     raw = response.read(MAX_ICS_BYTES + 1)
+                    unread = getattr(response, "length", None)  # bytes still owed by a Content-Length that was not honoured
                 if len(raw) > MAX_ICS_BYTES:
                     raise SourceError(tr(lang, "ics_too_big", mb=MAX_ICS_BYTES // (1024 * 1024)))
+                if unread:
+                    raise SourceError(tr(lang, "ics_cut"))
                 text = raw.decode("utf-8", "replace")
             else:
                 text = Path(location).read_text(encoding="utf-8", errors="replace")

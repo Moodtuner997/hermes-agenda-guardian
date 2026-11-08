@@ -119,3 +119,15 @@ ni un agenda particulier.
   vue par un humain, la livraison Telegram/WhatsApp du rappel. Défaut vu : `/day set calendar="cmd:programme arg"` tapé dans
   le chat est refusé (« is not key=value ») car le découpage coupe au premier espace ; la forme `/day set
   "calendar=cmd:programme arg"` ou la CLI passe (ticket, pas corrigé : hors des quatre demandes).
+- QA du 8/11 (clone neuf à `93d46b7`, Hermes 0.22.7, Windows 11 ; sondes écrites hors dépôt, rejouables) : 359 tests,
+  `validate` et l'e2e (34 contrôles) verts ; sur Hermes v0.23.0 (venv par `uv sync --locked --python 3.14`) `validate` et
+  l'e2e aussi. Tenu pour le README : environnement d'un programme enfant mesuré dans un vrai processus (liste exacte,
+  aucune clé, aucun proxy), `is_public` (30 adresses refusées, 6 acceptées), connexion à l'adresse vérifiée sans seconde
+  résolution, `localhost`/`127.0.0.1`/`[::1]`/`169.254.169.254` refusés, `day_setup` refuse `calendar` sous 8 écritures et
+  5 formes d'arguments, `day_schedule on` refusé en cron (réglage absent, faux, YAML illisible) et accepté avec
+  `cron.allow_agent_scheduling: true`, 52 appels du garde sur 260 Ko : 0,23 s au pire. Sans `SYSTEMROOT`, un Python
+  enfant ne résout plus aucun nom (`getaddrinfo failed`, Errno 11003).
+- Écarts mesurés le 8/11 : le garde laisse passer `calendar\=cmd:x` (bash) et `calendar^=cmd:x` (cmd.exe), ticket #8 ; la
+  lecture ICS lit toute la réponse sans borne et une redirection avec `\@` est lue de deux façons, ticket #9 ; même sans
+  espace, `/day set calendar="file:C:\…"` est refusé, commentaire du ticket #7 ; la section de consigne système fait 1 582
+  caractères en anglais et 1 760 en français (le README disait « environ 1 700 »).

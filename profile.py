@@ -100,7 +100,9 @@ def _calendar(text: str, lang: str = "en") -> dict:
         return {"type": "google"}
     kind, _, rest = text.partition(":")
     if kind in ("ics", "file") and rest:
-        if not rest.startswith(("http://", "https://")):
+        if kind == "ics" and rest.lower().startswith("http://"):
+            raise ValueError(tr(lang, "ics_https_only"))
+        if not rest.lower().startswith(("http://", "https://")):
             # A cron script or the gateway does not run in the folder the rule was typed in.
             rest = str(Path(rest).expanduser().resolve())
         return {"type": kind, "path": rest}

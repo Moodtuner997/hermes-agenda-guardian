@@ -144,21 +144,45 @@ def test_no_calendar_is_stated_not_silent(tmp_path):
     assert events == [] and "ignores your meetings" in warnings[0]
 
 
-def test_ics_url_is_fetched_and_plain_http_is_flagged(tmp_path):
-    class Response:
-        def __enter__(self):
-            return self
+class IcsResponse:
+    def __enter__(self):
+        return self
 
-        def __exit__(self, *a):
-            return False
+    def __exit__(self, *a):
+        return False
 
-        def read(self):
-            return ICS.encode()
+    def read(self):
+        return ICS.encode()
+
+
+def test_ics_url_is_fetched_over_https(tmp_path):
+    seen = []
+
+    def urlopen(request, timeout):
+        seen.append(request.full_url)
+        return IcsResponse()
 
     profile = prof.new_profile()
-    profile["calendar"] = {"type": "ics", "path": "http://example.test/cal.ics"}
-    events, warnings = fetch_events(profile, MONDAY, tmp_path, urlopen=lambda req, timeout: Response())
-    assert titles(events) == ["Birthday", "Stand, up"] and "plain http" in warnings[0]
+    profile["calendar"] = {"type": "ics", "path": "https://example.test/cal.ics"}
+    events, warnings = fetch_events(profile, MONDAY, tmp_path, urlopen=urlopen)
+    assert titles(events) == ["Birthday", "Stand, up"] and warnings == [] and seen == ["https://example.test/cal.ics"]
+
+
+@pytest.mark.parametrize("location", ["http://example.test/cal.ics", "HTTP://example.test/cal.ics"])
+def test_ics_over_plain_http_is_an_error_and_nothing_is_requested(tmp_path, location):
+    profile = prof.new_profile()
+    profile["calendar"] = {"type": "ics", "path": location}
+    with pytest.raises(SourceError, match="must start with https://"):
+        fetch_events(profile, MONDAY, tmp_path, urlopen=lambda *a, **kw: pytest.fail("a request was made"))
+
+
+def test_a_local_ics_file_is_still_read_as_is(tmp_path):
+    path = tmp_path / "cal.ics"
+    path.write_text(ICS, encoding="utf-8")
+    profile = prof.new_profile()
+    profile["calendar"] = {"type": "ics", "path": str(path)}
+    events, _ = fetch_events(profile, MONDAY, tmp_path, urlopen=lambda *a, **kw: pytest.fail("a request was made"))
+    assert titles(events) == ["Birthday", "Stand, up"]
 
 
 def test_calibration_needs_three_measurements_and_is_bounded(tmp_path):

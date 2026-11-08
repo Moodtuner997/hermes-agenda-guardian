@@ -7,7 +7,6 @@ import json
 import os
 import re
 import subprocess
-import urllib.request
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Callable
@@ -87,7 +86,7 @@ def parse_day(text: str, today: date, lang: str = "en") -> date:
 
 class Guardian(AgendaMixin):
     def __init__(self, db_path: Path, home: Path, now: Callable[[], datetime] | None = None,
-                 run=subprocess.run, urlopen=urllib.request.urlopen,
+                 run=subprocess.run, urlopen=sources.safe_urlopen,
                  cron: Callable[[dict], dict] | None = None, plugin_dir: Path | None = None):
         self.db_path, self.home = db_path, home
         self._now, self._run, self._urlopen = now or datetime.now, run, urlopen

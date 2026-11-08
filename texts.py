@@ -130,7 +130,7 @@ Two commands you type yourself:
     # --- calendar sources ------------------------------------------------------------------------------------
     "no_calendar": "No calendar connected: the plan ignores your meetings. Connect one with "
                    "/day set calendar=google (or ics:<file or URL>), or run /day setup.",
-    "plain_http": "The calendar URL is plain http: anyone on the network can read it",
+    "ics_https_only": "The calendar URL must start with https:// (plain http is refused: anyone on the network could read or alter it)",
     "recurring": "{n} recurring event(s) repeat monthly or yearly; only their first date is read, so later "
                  "repeats are missing from the plan",
     # --- setup -----------------------------------------------------------------------------------------------
@@ -301,7 +301,7 @@ Deux commandes que tu tapes toi-même :
     "day_full": "La journée est pleine : {names} ne tient pas. Déplace-la, raccourcis-la ou libère du temps.",
     "no_calendar": "Aucun agenda connecté : le plan ignore tes réunions. Connectes-en un avec "
                    "/day set calendar=google (ou ics:<fichier ou URL>), ou lance /day setup.",
-    "plain_http": "L'URL de l'agenda est en http simple : quiconque est sur le réseau peut la lire",
+    "ics_https_only": "L'URL de l'agenda doit commencer par https:// (le http simple est refusé : quiconque est sur le réseau pourrait la lire ou la modifier)",
     "recurring": "{n} événement(s) récurrent(s) se répètent chaque mois ou chaque année ; seule leur première date "
                  "est lue, les répétitions suivantes manquent donc au plan",
     "setup_title": "Réglage de l'agenda guardian - environ 3 minutes, tu pourras tout affiner plus tard",

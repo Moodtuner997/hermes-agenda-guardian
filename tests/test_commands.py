@@ -38,7 +38,8 @@ def test_settings_validate_and_remember_where_they_came_from(profile):
     assert prof.source_of(profile, "work_hours") == "you set it on 2026-11-09"
     assert prof.source_of(profile, "focus").startswith("default")
     for key, value in [("work_hours", "17:00-09:00"), ("work_hours", "9h-17h"), ("buffer_min", "500"),
-                       ("protected", "lunch"), ("workdays", "funday"), ("calendar", "outlook"), ("nope", "1")]:
+                       ("protected", "lunch"), ("workdays", "funday"), ("calendar", "outlook"), ("calendar", "ics:http://x/a.ics"),
+                       ("nope", "1")]:
         with pytest.raises(ValueError):
             prof.apply_setting(profile, key, value, today)
 

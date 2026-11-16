@@ -15,6 +15,7 @@ import json
 import os
 import sys
 import tempfile
+from datetime import date, timedelta
 from pathlib import Path
 
 from hermes_cli.plugins import discover_plugins, get_plugin_command_handler
@@ -41,35 +42,40 @@ def slash(raw: str) -> str:
     return get_plugin_command_handler("day")(raw, session_id="e2e-session")
 
 
+# Dates relative to today: day_stage refuses a block before today, so fixed dates broke the
+# check once they passed (CI red since 2026-11-12). Next Monday keeps the week shape (tue).
+_monday = date.today() + timedelta(days=7 - date.today().weekday())
+MONDAY, TUESDAY, WEDNESDAY = ((_monday + timedelta(days=d)).isoformat() for d in range(3))
+
 discover_plugins(force=True)
 work = Path(tempfile.mkdtemp(prefix="day-e2e-"))
-(work / "cal.json").write_text(json.dumps([{"summary": "Client call", "start": "2026-11-09T10:30:00",
-                                            "end": "2026-11-09T11:00:00"}]), encoding="utf-8")
+(work / "cal.json").write_text(json.dumps([{"summary": "Client call", "start": f"{MONDAY}T10:30:00",
+                                            "end": f"{MONDAY}T11:00:00"}]), encoding="utf-8")
 
 print(slash(f"set language=en work_hours=09:00-17:30 calendar=file:{work / 'cal.json'}"))  # the checks read English
 added = tool("day_add_task", {"name": "Write the quote", "minutes": 45, "priority": 1})
 check("day_add_task answers through the registry", added.get("ok") is True, json.dumps(added)[:200])
-plan = tool("day_plan", {"day": "2026-11-09"})
+plan = tool("day_plan", {"day": MONDAY})
 check("day_plan lists the task and the meeting", "Write the quote" in plan.get("plan", "")
       and "Client call" in plan.get("plan", ""), json.dumps(plan)[:300])
 
 kind = tool("day_kind", {"name": "sport", "real_minutes": 90, "before_minutes": 10, "after_minutes": 20,
                          "window": "18:00-22:00"})
 check("day_kind saves an activity sheet", kind.get("ok") is True and kind.get("kind", {}).get("name") == "sport", json.dumps(kind)[:300])
-proposal = tool("day_propose", {"activity": "sport", "from_day": "2026-11-09", "to_day": "2026-11-11"})
+proposal = tool("day_propose", {"activity": "sport", "from_day": MONDAY, "to_day": WEDNESDAY})
 check("day_propose answers with reasons and says nothing was written",
       proposal.get("ok") is True and proposal.get("sessions") and proposal["sessions"][0]["reasons"]
       and "Nothing is written" in proposal.get("text", ""), json.dumps(proposal)[:400])
 blocked = tool("day_confirm", {"proposal_id": proposal.get("proposal_id", 1)})
 check("day_confirm is refused until the user typed /day write on",
       blocked.get("ok") is False and "write on" in blocked.get("error", ""), json.dumps(blocked)[:300])
-plan_week = tool("day_week_plan", {"from_day": "2026-11-09", "to_day": "2026-11-11", "activities": [
+plan_week = tool("day_week_plan", {"from_day": MONDAY, "to_day": WEDNESDAY, "activities": [
     {"name": "calls", "minutes": 90, "sessions": 1, "window": "09:00-12:00"},
     {"name": "course", "minutes": 60, "per_day": 1, "window": "13:00-18:00", "days": "tue"}]})
 check("day_week_plan places two activities in one call and writes nothing",
       plan_week.get("ok") is True and {s["kind"] for s in plan_week.get("sessions", [])} == {"calls", "course"}
       and "Nothing is written" in plan_week.get("text", ""), json.dumps(plan_week)[:400])
-staged = tool("day_stage", {"blocks": [{"title": "Choir", "day": "2026-11-10", "start": "19:00", "end": "20:00"}]})
+staged = tool("day_stage", {"blocks": [{"title": "Choir", "day": TUESDAY, "start": "19:00", "end": "20:00"}]})
 check("day_stage registers a composed block as a proposal", staged.get("ok") is True
       and staged.get("proposal_id") and "Choir" in staged.get("text", ""), json.dumps(staged)[:300])
 blocked = tool("day_confirm", {"proposal_id": staged.get("proposal_id", 1)})
@@ -86,15 +92,15 @@ check("the gateway hook hands a /day sentence to the agent", len(said) == 1 and 
 check("the gateway hook leaves a command alone",
       invoke_hook("pre_gateway_dispatch", event=SimpleNamespace(text="/day plan tomorrow"), gateway=None,
                   session_store=None) == [])
-week = tool("day_week", {"week_of": "2026-11-09"})
-check("day_week reads the week", week.get("ok") is True and week.get("week_start") == "2026-11-09"
+week = tool("day_week", {"week_of": MONDAY})
+check("day_week reads the week", week.get("ok") is True and week.get("week_start") == MONDAY
       and len(week.get("proposed", [])) >= 1, json.dumps(week)[:300])
 
 setup = tool("day_setup", {"settings": {"Calendar": "cmd:python -c print(1)", "buffer_min": "5"}})
 check("day_setup refuses a calendar source from a tool and still applies the rest",
       setup.get("ok") is True and "refused  Calendar" in setup.get("result", "") and "ok  buffer_min" in setup.get("result", "")
       and "for_agent" in setup, json.dumps(setup)[:300])
-check("the calendar is still the user's file", "Client call" in tool("day_plan", {"day": "2026-11-09"}).get("plan", ""))
+check("the calendar is still the user's file", "Client call" in tool("day_plan", {"day": MONDAY}).get("plan", ""))
 check("the gateway hook leaves a typed calendar command to the dispatcher",
       invoke_hook("pre_gateway_dispatch", event=SimpleNamespace(text="/day set calendar=cmd:mycal"), gateway=None,
                   session_store=None) == [])

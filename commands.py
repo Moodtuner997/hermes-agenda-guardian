@@ -81,7 +81,7 @@ def sets_calendar(raw: str) -> bool:
         tokens = (raw or "").split()
     head = tokens[0].lower() if tokens else ""
     if head == "set":
-        return any(normal_key(token.partition("=")[0]) == "calendar" for token in tokens[1:] if "=" in token)
+        return any(normal_key(token.partition("=")[0]) in ("calendar", "connector_tools") for token in tokens[1:] if "=" in token)
     return head == "setup" and len(tokens) > 1 and tokens[1].lower() == "auto"
 
 

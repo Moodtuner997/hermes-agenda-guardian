@@ -230,3 +230,34 @@ def test_no_tool_can_rename_the_connector_tools_and_none_restores_the_defaults(w
     world.g.set_rules([tuple(MAPPED.split("=", 1))])
     world.g.set_rules([("connector_tools", "none")])
     assert staged(world)["handoff"][0]["tool"] == "create_event"
+
+
+def test_record_does_not_adopt_a_third_party_event_that_copies_the_guessable_marker(world):
+    done = staged(world)
+    call = done["handoff"][0]["arguments"]
+    group = call["description"].split(":")[1]
+    part = call["description"].split(":")[2].rstrip("]")
+    world.program.add("Theirs", call["start"], call["end"], description=f"[agenda-guardian:{group}:{part}] copied")
+    result = world.g.record()
+    assert result["recorded"] == [] and store.written(world.g.conn) == []
+    assert len(call["description"].split("]")[0].split(":")) == 4  # [agenda-guardian:<group>:<part>:<unguessable token>
+
+
+def test_record_refuses_a_program_output_without_ids(world):
+    staged(world)
+    world.program.events.append({"summary": "x", "start": "2026-11-10T09:00:00+01:00", "end": "2026-11-10T10:00:00+01:00"})
+    with pytest.raises(UserError, match="without an id"):
+        world.g.record()
+
+
+def test_typing_connector_tools_in_chat_is_answered_by_the_dispatcher_like_calendar():
+    assert commands.sets_calendar("set connector_tools=create=a(title=t,start=s,end=e,description=d);remove=b(id=i)")
+    assert commands.sets_calendar("set Connector-Tools=none")
+    assert not commands.sets_calendar("set buffer_min=5")
+
+
+def test_a_program_that_prints_too_much_is_refused(world):
+    from agenda_guardian import sources
+    big = SimpleNamespace(returncode=0, stdout="[" + "1," * (3 * 1024 * 1024) + "1]", stderr="")
+    with pytest.raises(sources.SourceError, match="refused"):
+        sources._run_json(["x"], lambda *a, **k: big, world.home)

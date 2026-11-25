@@ -26,6 +26,7 @@ MAX_ICS_BYTES = 5 * 1024 * 1024  # a secret ICS address answers with a few hundr
 GOOGLE_SCRIPT = Path("skills") / "productivity" / "google-workspace" / "scripts" / "google_api.py"
 GOOGLE_LIBRARY = "googleapiclient"  # what the skill's script imports first when it has no `gws` to call
 MAX_ITERATIONS = 4000
+MAX_PROGRAM_BYTES = 5 * 1024 * 1024  # a calendar program prints a list of events, never more than a few MB
 
 
 class SourceError(Exception):
@@ -265,6 +266,8 @@ def _run_json(argv: list[str], run, home: Path, google: bool = False) -> object:
             raise SourceError(f"the Google Workspace skill cannot import its libraries ({detail[-1][:120]}): run its "
                               "setup.py with --install-deps using the Python of the Hermes environment, then restart Hermes")
         raise SourceError(f"calendar program exited {done.returncode}: {detail[-1][:200] if detail else 'no output'}")
+    if len(done.stdout or "") > MAX_PROGRAM_BYTES:
+        raise SourceError(f"calendar program printed more than {MAX_PROGRAM_BYTES // (1024 * 1024)} MB: refused")
     try:
         return json.loads(done.stdout)
     except ValueError:

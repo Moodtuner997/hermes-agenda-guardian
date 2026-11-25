@@ -95,6 +95,7 @@ EN = {
     "undo_handoff_head": "Removal staged, nothing is removed yet. Call the tool named in each item of 'handoff' (the connector's delete tool) with exactly "
                          "these arguments (the user accepts each one), then call day_record. Items:",
     "record_none": "Nothing waits to be recorded.",
+    "record_no_id": "The calendar program printed an event without an id: nothing was recorded.",
     "record_needs_connector": "day_record only exists for an agenda connector calendar (calendar=connector:<program>).",
     "record_unreadable": "I could not read your calendar ({why}): nothing was recorded.",
     "record_created": "{summary} ({start}): it is in your calendar, recorded.",
@@ -253,6 +254,7 @@ FR = {
     "undo_handoff_head": "Retrait préparé, rien n'est encore retiré. Appelle l'outil nommé dans chaque élément de 'handoff' (l'outil de suppression du connecteur) "
                          "avec exactement ces arguments (l'utilisateur accepte chacun), puis appelle day_record. Éléments :",
     "record_none": "Rien n'attend d'être enregistré.",
+    "record_no_id": "Le programme d'agenda a affiché un événement sans identifiant : rien n'est enregistré.",
     "record_needs_connector": "day_record n'existe que pour un agenda à connecteur (calendar=connector:<programme>).",
     "record_unreadable": "Je n'ai pas pu lire ton agenda ({why}) : rien n'est enregistré.",
     "record_created": "{summary} ({start}) : il est dans ton agenda, enregistré.",

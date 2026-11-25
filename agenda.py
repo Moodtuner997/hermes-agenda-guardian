@@ -5,6 +5,7 @@ returns a dict with a ``text`` (what a person reads) and the same facts as data 
 from __future__ import annotations
 
 import json
+import secrets
 from datetime import date, datetime, timedelta
 
 from . import history, kinds as kindmod, planner, profile as prof, proposer, sources, store, writer
@@ -432,7 +433,8 @@ class AgendaMixin:
             made = []
             for part, summary, start, end in parts:
                 if via_connector:  # the plugin writes nothing itself: the agent's connector tool asks the user, then we look
-                    description = f"{writer.marker(group, part)} {tr(lang, 'event_desc', id=group)}"
+                    mark = writer.marker(group, part)[:-1] + f":{secrets.token_hex(8)}]"  # unguessable: only this event matches
+                    description = f"{mark} {tr(lang, 'event_desc', id=group)}"
                     store.add_handoff(self.conn, {"op": "create", "group_id": group, "proposal_id": proposal_id, "kind": name,
                                                   "part": part, "summary": summary, "start": start.isoformat(),
                                                   "end": end.isoformat(), "description": description}, now)
@@ -547,12 +549,15 @@ class AgendaMixin:
             raise UserError(tr(lang, "record_unreadable", why=exc))
         tz = profile.get("timezone", "")
         recorded, removed, lines, waiting, lapsed = [], [], [], 0, 0
+        if any(not str(e.get("id", "")).strip() for e in raw):
+            raise UserError(tr(lang, "record_no_id"))
         live_ids = {str(e.get("id")) for e in raw}
         for row in pending:
             old = now - datetime.fromisoformat(row["created_at"]) > PROPOSAL_LIFETIME
             when = row["start"][:16].replace("T", " ")
             if row["op"] == "create":
-                hit = next((e for e in raw if writer.marker(row["group_id"], row["part"]) in str(e.get("description", ""))
+                mark = str(row.get("description", "")).split(" ", 1)[0]
+                hit = next((e for e in raw if mark.startswith("[" + writer.MARK) and mark in str(e.get("description", ""))
                             and self._same_times(e, row, tz)), None)
                 if hit is not None:
                     store.record_written(self.conn, {

@@ -106,12 +106,14 @@ def _calendar(text: str, lang: str = "en") -> dict:
             # A cron script or the gateway does not run in the folder the rule was typed in.
             rest = str(Path(rest).expanduser().resolve())
         return {"type": kind, "path": rest}
-    if kind == "cmd" and rest:
+    if kind in ("cmd", "connector") and rest:
         argv = [a[1:-1] if len(a) > 1 and a[0] == a[-1] and a[0] in "\"'" else a
                 for a in shlex.split(rest, posix=os.name != "nt")]
         if not argv:
             raise ValueError(tr(lang, "cmd_needs"))
-        return {"type": "command", "argv": argv}
+        # ``connector:`` reads like ``cmd:`` (the program prints the events as JSON) and marks a calendar that is written
+        # through the agent's own connector tools instead of by this plugin (see ``AgendaMixin.confirm``).
+        return {"type": "command" if kind == "cmd" else "connector", "argv": argv}
     raise ValueError(tr(lang, "bad_calendar"))
 
 

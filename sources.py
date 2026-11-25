@@ -453,6 +453,22 @@ def iso_utc(moment: datetime, tzname: str) -> str:
     return _aware(moment, tzname).astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def fetch_raw(profile: dict, first: date, last: date, home: Path, *, run=subprocess.run) -> list[dict]:
+    """The events of a ``connector`` calendar as the program printed them (id, description, times...), for the one job that
+    needs more than a title and a time: finding what the agent's connector tools really created or removed. A program
+    that fails is an error, never an empty list."""
+    source = profile.get("calendar") or {}
+    if source.get("type") != "connector":
+        raise SourceError("only a connector calendar can be read raw")
+    tzname = profile.get("timezone", "")
+    start_iso = iso_utc(_day_bounds(first)[0], tzname)
+    end_iso = iso_utc(_day_bounds(last)[1], tzname)
+    data = _run_json([a.replace("{start}", start_iso).replace("{end}", end_iso) for a in source["argv"]], run, home)
+    if not isinstance(data, list):
+        raise SourceError("the calendar program must print a JSON list of events")
+    return [e for e in data if isinstance(e, dict)]
+
+
 def fetch_range(profile: dict, first: date, last: date, home: Path, *, run=subprocess.run,
                 urlopen=safe_urlopen) -> tuple[list[Event], list[str]]:
     """Events touching the days ``first``..``last`` (both included) and warnings. A single day keeps the
@@ -465,7 +481,7 @@ def fetch_range(profile: dict, first: date, last: date, home: Path, *, run=subpr
     limit = 100 if first == last else 500
     if kind == "none":
         return [], [tr(lang, "no_calendar")]
-    if kind in ("google", "command"):
+    if kind in ("google", "command", "connector"):
         start_iso, end_iso = iso_utc(lo, tzname), iso_utc(hi, tzname)
         if kind == "google":
             data = run_google(home, "calendar", "list", "--start", start_iso, "--end", end_iso, "--max", str(limit),

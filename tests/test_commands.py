@@ -156,7 +156,7 @@ def test_registration_and_tools_round_trip(tmp_path, monkeypatch):
     assert set(ctx.commands) == {"day"} and set(ctx.cli) == {"guardian"}
     assert set(ctx.tools) == {"day_setup", "day_add_task", "day_plan", "day_done", "day_tasks", "day_schedule",
                               "day_kind", "day_habit", "day_propose", "day_confirm", "day_undo", "day_took",
-                              "day_week", "day_week_plan", "day_stage"}
+                              "day_week", "day_week_plan", "day_stage", "day_record"}
     assert set(ctx.hooks) == {"pre_gateway_dispatch", "pre_tool_call"}
 
     call = lambda name, args: json.loads(ctx.tools[name](args))

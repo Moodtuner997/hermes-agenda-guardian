@@ -35,6 +35,10 @@ CREATE TABLE IF NOT EXISTS habits (
 CREATE TABLE IF NOT EXISTS proposals (
   id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL,
   payload TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS handoff (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, op TEXT NOT NULL, group_id INTEGER NOT NULL, proposal_id INTEGER, event_id TEXT,
+  kind TEXT NOT NULL, part TEXT NOT NULL, summary TEXT NOT NULL, start TEXT NOT NULL, end TEXT NOT NULL,
+  description TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS written (
   event_id TEXT PRIMARY KEY, calendar_id TEXT NOT NULL, group_id INTEGER NOT NULL, proposal_id INTEGER,
   kind TEXT NOT NULL, part TEXT NOT NULL, summary TEXT NOT NULL, start TEXT NOT NULL, end TEXT NOT NULL,
@@ -246,7 +250,33 @@ def set_proposal_status(conn, proposal_id: int, status: str) -> None:
 
 
 def new_group(conn) -> int:
-    return conn.execute("SELECT COALESCE(MAX(group_id), 0) + 1 FROM written").fetchone()[0]
+    return conn.execute("SELECT MAX(COALESCE((SELECT MAX(group_id) FROM written), 0), "
+                        "COALESCE((SELECT MAX(group_id) FROM handoff), 0)) + 1").fetchone()[0]
+
+
+_HANDOFF_COLS = ("id", "op", "group_id", "proposal_id", "event_id", "kind", "part", "summary", "start", "end", "description",
+                 "status", "created_at")
+
+
+def add_handoff(conn, row: dict, now: datetime) -> int:
+    """One write that an agent tool has to make (``create`` an event, or ``remove`` one this plugin wrote)."""
+    cursor = conn.execute(
+        "INSERT INTO handoff(op, group_id, proposal_id, event_id, kind, part, summary, start, end, description, status, "
+        "created_at) VALUES(?,?,?,?,?,?,?,?,?,?,'pending',?)",
+        (row["op"], row["group_id"], row.get("proposal_id"), row.get("event_id"), row["kind"], row["part"], row["summary"],
+         row["start"], row["end"], row.get("description", ""), now.isoformat()))
+    conn.commit()
+    return cursor.lastrowid
+
+
+def pending_handoff(conn) -> list[dict]:
+    sql = f"SELECT {', '.join(_HANDOFF_COLS)} FROM handoff WHERE status='pending' ORDER BY id"
+    return [dict(zip(_HANDOFF_COLS, r)) for r in conn.execute(sql)]
+
+
+def set_handoff_status(conn, handoff_id: int, status: str) -> None:
+    conn.execute("UPDATE handoff SET status=? WHERE id=?", (status, handoff_id))
+    conn.commit()
 
 
 def record_written(conn, row: dict, now: datetime) -> None:

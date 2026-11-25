@@ -16,7 +16,7 @@ who plans more than the day allows.
 - It reads your calendar and, by default, writes nothing. Writing to a Google calendar is off until you type
   `/day write on` yourself; then it only adds events it marks as its own, only after you say yes to a proposal
   that shows its reasons, and it can only remove those events (never one you created).
-- Works from the `/day` slash command, `hermes guardian` on the command line (not `hermes day`: the day-panel plugin already uses that name), fifteen agent tools (so the onboarding and the planning can
+- Works from the `/day` slash command, `hermes guardian` on the command line (not `hermes day`: the day-panel plugin already uses that name), sixteen agent tools (so the onboarding and the planning can
   happen in a chat, including from a phone) and a **Today / Week** tab in the dashboard.
 - **You talk to it in plain words, there is no syntax to learn.** "Put three sport sessions, two client calls and
   two hours of course a day in my week", "the walk took me 1h30". `/day` followed by anything but one of the
@@ -180,6 +180,7 @@ What it will and will not do:
 | `ics:<path or https URL>` | an ICS file or the secret `https://` ICS address of a calendar (Outlook, Google, Apple) |
 | `file:<path>` | a JSON file: a list of `{summary, start, end}` (the shape the Google script prints) |
 | `cmd:<program and arguments>` | any program that prints that JSON; `{start}` and `{end}` are replaced by the day's UTC bounds; run without a shell |
+| `connector:<program and arguments>` | read like `cmd:`; the calendar is written by the agent's own connector tools, not by this plugin (see below) |
 | `none` | nothing; the plan says it ignores your meetings |
 
 If the source cannot be read, the plan carries a visible warning instead of silently assuming an empty day.
@@ -354,3 +355,12 @@ python tests/make_demo_profile.py --home <home>             # an invented day fo
 ```
 
 MIT licence.
+
+## Calendars written through a connector
+
+With `calendar=connector:<program>` the plugin reads like `cmd:` but never writes: `day_confirm` writes nothing and returns
+`handoff`, the exact `agenda_creer` calls (title, start, end, description carrying the plugin marker) for the agent to make
+with its own connector tool, where you accept each one. `day_record` then re-reads the calendar and records only events that
+carry the marker with the same times; a refused or failed call is simply not recorded, and a staged call older than a day is
+set aside. `day_undo` stages `agenda_supprimer` calls the same way, and an event counts as removed only once it is gone from the
+calendar. A program that fails is an error, never an empty day. Writing stays off until you type `/day write on`.

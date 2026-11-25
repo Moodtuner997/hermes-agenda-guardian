@@ -20,7 +20,7 @@ EN = {
     "int_needed": "{key} must be a whole number between {low} and {high}",
     "int_range": "{key} must be between {low} and {high}",
     "bad_calendar": "calendar must be none, google, ics:<file or https URL>, file:<json file> or "
-                    "cmd:<program that prints event JSON; {{start}} and {{end}} are filled in>",
+                    "cmd:<program that prints event JSON; {{start}} and {{end}} are filled in> or connector:<same, written by your own agent tools>",
     "cmd_needs": "cmd: needs a program to run",
     "category_form": "category looks like admin:20 (typical minutes) or admin:none to remove it",
     "category_whole": "category minutes must be a whole number",
@@ -204,7 +204,7 @@ FR = {
     "int_needed": "{key} doit être un nombre entier entre {low} et {high}",
     "int_range": "{key} doit être compris entre {low} et {high}",
     "bad_calendar": "calendar vaut none, google, ics:<fichier ou URL https>, file:<fichier json> ou "
-                    "cmd:<programme qui affiche des événements en JSON ; {{start}} et {{end}} sont remplis>",
+                    "cmd:<programme qui affiche des événements en JSON ; {{start}} et {{end}} sont remplis> ou connector:<idem, écrit par tes propres outils d'agent>",
     "cmd_needs": "cmd: demande un programme à lancer",
     "category_form": "category s'écrit admin:20 (minutes habituelles) ou admin:none pour la retirer",
     "category_whole": "les minutes d'une catégorie sont un nombre entier",

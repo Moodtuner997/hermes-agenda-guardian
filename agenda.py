@@ -14,6 +14,7 @@ from .texts import day_name, join_and, tr
 PROPOSAL_LIFETIME = timedelta(hours=24)
 HISTORY_WEEKS = history.WEEKS
 ASK_WINDOW = timedelta(hours=8)
+WRITABLE = ("google", "connector")  # a Google calendar (written here) or an agenda connector (written by the agent's own tools)
 WEEK, STAGED = "plan:week", "plan:stage"  # the "kind" of a proposal that holds several activities / given blocks (the colon keeps them apart from activity names)
 
 
@@ -24,7 +25,7 @@ class AgendaMixin:
 
     def set_write(self, on: bool) -> dict:
         lang = self.lang()
-        if on and self.profile()["calendar"]["type"] != "google":
+        if on and self.profile()["calendar"]["type"] not in WRITABLE:
             raise UserError(tr(lang, "write_needs_google"))
         store.set_flag(self.conn, "calendar_write", on)
         return {"ok": True, "calendar_write": on, "text": tr(lang, "write_on" if on else "write_off")}
@@ -390,8 +391,9 @@ class AgendaMixin:
         lang, profile, now = self.lang(), self.profile(), self.now()
         if not self.write_enabled():
             raise UserError(tr(lang, "confirm_off"))
-        if profile["calendar"]["type"] != "google":
+        if profile["calendar"]["type"] not in WRITABLE:
             raise UserError(tr(lang, "write_needs_google"))
+        via_connector = profile["calendar"]["type"] == "connector"
         proposal = store.get_proposal(self.conn, proposal_id)
         if proposal is None:
             raise UserError(tr(lang, "confirm_unknown", id=proposal_id))
@@ -410,7 +412,7 @@ class AgendaMixin:
             sessions = [s for s in sessions if date.fromisoformat(s["day"]).isoweekday() in wanted]
         if not sessions:
             raise UserError(tr(lang, "confirm_nothing"))
-        written, skipped, lines = [], [], []
+        written, skipped, lines, calls = [], [], [], []
         days_of = [date.fromisoformat(s["day"]) for s in sessions]
         try:  # the slots are read again, once for the whole range: a week is not twenty calendar calls
             current, _ = sources.fetch_range(profile, min(days_of), max(days_of), self.home, run=self._run,
@@ -429,6 +431,16 @@ class AgendaMixin:
             parts = self._parts(s, kind, name, lang)
             made = []
             for part, summary, start, end in parts:
+                if via_connector:  # the plugin writes nothing itself: the agent's connector tool asks the user, then we look
+                    description = f"{writer.marker(group, part)} {tr(lang, 'event_desc', id=group)}"
+                    store.add_handoff(self.conn, {"op": "create", "group_id": group, "proposal_id": proposal_id, "kind": name,
+                                                  "part": part, "summary": summary, "start": start.isoformat(),
+                                                  "end": end.isoformat(), "description": description}, now)
+                    calls.append({"tool": "agenda_creer", "arguments": {
+                        "titre": summary, "debut": sources._aware(start, profile.get("timezone", "")).isoformat(),
+                        "fin": sources._aware(end, profile.get("timezone", "")).isoformat(), "description": description}})
+                    made.append({"part": part, "summary": summary, "link": ""})
+                    continue
                 try:
                     event_id, link = writer.create(
                         self.home, profile.get("timezone", ""), "primary", summary, start, end,
@@ -446,11 +458,17 @@ class AgendaMixin:
                 if proposal["kind"] == STAGED:  # a fixed block the user described: no "how long did it take"
                     store.mark_notified(self.conn, f"logged:{group}", now)
                 written.append({"group": group, "day": s["day"], "events": made})
-                lines.append(tr(lang, "confirm_line", group=group, kind=name, day=s["weekday"], date=f"{b0:%d/%m}",
-                                block=f"{b0:%H:%M}-{b1:%H:%M}", n=len(made), link=made[0]["link"]))
+                lines.append(tr(lang, "confirm_handoff_line" if via_connector else "confirm_line", group=group, kind=name,
+                                day=s["weekday"], date=f"{b0:%d/%m}", block=f"{b0:%H:%M}-{b1:%H:%M}", n=len(made),
+                                link=made[0]["link"]))
+        lines += [f"! {x['why']}" for x in skipped]
+        if via_connector:
+            store.set_proposal_status(self.conn, proposal_id, "handoff" if written else "failed")
+            if written:
+                lines.insert(0, tr(lang, "handoff_head"))
+            return {"ok": bool(written), "handoff": calls, "staged": written, "skipped": skipped, "text": "\n".join(lines)}
         store.set_proposal_status(self.conn, proposal_id, "written" if written and not skipped else
                                   ("partial" if written else "failed"))
-        lines += [f"! {x['why']}" for x in skipped]
         if written:
             lines.append(tr(lang, "confirm_undo"))
         return {"ok": bool(written), "written": written, "skipped": skipped, "text": "\n".join(lines)}
@@ -482,6 +500,8 @@ class AgendaMixin:
         rows = [r for g in groups for r in store.written(self.conn, g)]
         if not rows:
             return {"ok": True, "removed": [], "text": tr(lang, "undo_none")}
+        if profile["calendar"]["type"] == "connector":
+            return self._undo_handoff(rows, now, lang)
         results, lines = [], []
         for row in rows:
             try:
@@ -494,6 +514,79 @@ class AgendaMixin:
             results.append({"event": row["summary"], "outcome": outcome})
             lines.append(tr(lang, "undo_" + outcome, summary=row["summary"], start=row["start"][:16].replace("T", " ")))
         return {"ok": True, "removed": results, "text": "\n".join(lines)}
+
+    def _undo_handoff(self, rows: list[dict], now: datetime, lang: str) -> dict:
+        """Connector calendar: the removals are the agent's connector tool calls (the user accepts each), recorded by day_record."""
+        waiting = {r["event_id"] for r in store.pending_handoff(self.conn) if r["op"] == "remove"}
+        calls = []
+        for row in rows:
+            if row["event_id"] not in waiting:
+                store.add_handoff(self.conn, {"op": "remove", "group_id": row["group_id"], "event_id": row["event_id"],
+                                              "kind": row["kind"], "part": row["part"], "summary": row["summary"],
+                                              "start": row["start"], "end": row["end"]}, now)
+            calls.append({"tool": "agenda_supprimer", "arguments": {"evenement": row["event_id"], "prevenir": False}})
+        listing = "\n".join(f"- {r['summary']} ({r['start'][:16].replace('T', ' ')})" for r in rows)
+        return {"ok": True, "handoff": calls, "removed": [], "text": tr(lang, "undo_handoff_head") + "\n" + listing}
+
+    def record(self) -> dict:
+        """After the agent's connector tools ran: read the calendar and record what is really there. A create is recorded only if an
+        event carrying this plugin's marker with the same times exists; a removal only if the event id is gone. What the user
+        refused or what failed stays pending, then lapses after a day. Nothing is recorded on the agent's word."""
+        lang, profile, now = self.lang(), self.profile(), self.now()
+        if profile["calendar"]["type"] != "connector":
+            raise UserError(tr(lang, "record_needs_connector"))
+        pending = store.pending_handoff(self.conn)
+        if not pending:
+            return {"ok": True, "recorded": [], "removed": [], "waiting": 0, "lapsed": 0, "text": tr(lang, "record_none")}
+        days = [date.fromisoformat(r["start"][:10]) for r in pending] + [date.fromisoformat(r["end"][:10]) for r in pending]
+        try:
+            raw = sources.fetch_raw(profile, min(days), max(days), self.home, run=self._run)
+        except sources.SourceError as exc:
+            raise UserError(tr(lang, "record_unreadable", why=exc))
+        tz = profile.get("timezone", "")
+        recorded, removed, lines, waiting, lapsed = [], [], [], 0, 0
+        live_ids = {str(e.get("id")) for e in raw}
+        for row in pending:
+            old = now - datetime.fromisoformat(row["created_at"]) > PROPOSAL_LIFETIME
+            when = row["start"][:16].replace("T", " ")
+            if row["op"] == "create":
+                hit = next((e for e in raw if writer.marker(row["group_id"], row["part"]) in str(e.get("description", ""))
+                            and self._same_times(e, row, tz)), None)
+                if hit is not None:
+                    store.record_written(self.conn, {
+                        "event_id": str(hit["id"]), "calendar_id": "primary", "group_id": row["group_id"],
+                        "proposal_id": row["proposal_id"], "kind": row["kind"], "part": row["part"], "summary": row["summary"],
+                        "start": row["start"], "end": row["end"], "link": str(hit.get("htmlLink", ""))}, now)
+                    store.set_handoff_status(self.conn, row["id"], "done")
+                    recorded.append(row["summary"])
+                    lines.append(tr(lang, "record_created", summary=row["summary"], start=when))
+                    continue
+            elif row["event_id"] not in live_ids:
+                store.mark_removed(self.conn, row["event_id"], "deleted", now)
+                store.set_handoff_status(self.conn, row["id"], "done")
+                removed.append(row["summary"])
+                lines.append(tr(lang, "undo_deleted", summary=row["summary"], start=when))
+                continue
+            if old:
+                store.set_handoff_status(self.conn, row["id"], "lapsed")
+                lapsed += 1
+            else:
+                waiting += 1
+        if waiting:
+            lines.append(tr(lang, "record_waiting", n=waiting))
+        if lapsed:
+            lines.append(tr(lang, "record_lapsed", n=lapsed))
+        return {"ok": True, "recorded": recorded, "removed": removed, "waiting": waiting, "lapsed": lapsed,
+                "text": "\n".join(lines)}
+
+    @staticmethod
+    def _same_times(event: dict, row: dict, tz: str) -> bool:
+        try:
+            start, _ = sources.parse_when(str(event.get("start", "")), tz)
+            end, _ = sources.parse_when(str(event.get("end", "")), tz)
+        except ValueError:
+            return False
+        return start == datetime.fromisoformat(row["start"]) and end == datetime.fromisoformat(row["end"])
 
     # --- how long did it really take ------------------------------------------------------------------------
     def took(self, ref: str, minutes: int) -> dict:

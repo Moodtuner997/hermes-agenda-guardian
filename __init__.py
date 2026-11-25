@@ -4,7 +4,7 @@ Plans from the durations you estimate, corrected by the durations you actually t
 of any calendar source, inside rules you wrote down yourself. It also fits activities (sport, a long call) into
 the week with reasons drawn from the calendar's history, and writes to a Google calendar only when the user
 typed ``/day write on`` and said yes, removing only what it wrote. It never calls a model: ``/day`` (slash),
-``hermes guardian`` (CLI) and fifteen tools for the agent share one core. ``/day`` followed by anything but a
+``hermes guardian`` (CLI) and sixteen tools for the agent share one core. ``/day`` followed by anything but a
 format-free command (write, undo, plan...) is a request in plain words: it goes to the agent, not to the parser,
 except ``set ... calendar=...`` and ``setup auto``: the calendar source is the user's alone, no tool sets it, and
 the ``pre_tool_call`` guard asks a human before the agent's terminal, code or file tools take an obvious side road.
@@ -217,6 +217,10 @@ def _t_undo(g: Guardian, a: dict) -> dict:
     return g.undo(str(a.get("which", "last")))
 
 
+def _t_record(g: Guardian, a: dict) -> dict:
+    return g.record()
+
+
 def _t_took(g: Guardian, a: dict) -> dict:
     if a.get("actual_minutes") is None:
         raise UserError("actual_minutes is required: ask the user how long it really took.")
@@ -328,13 +332,19 @@ _TOOLS = [
         "it ONLY after the user has clearly said yes to this exact proposal in this conversation; never on your own "
         "initiative. It refuses unless the user themselves turned writing on (/day write on). It never touches an "
         "existing event: it only adds events marked as created by this plugin, so day_undo can take them back. "
-        "Never write to the calendar with another tool.",
+        "With an agenda connector calendar it writes nothing itself: it returns 'handoff', the connector tool calls to make "
+        "(then day_record). Never write to the calendar with another tool.",
         {"proposal_id": {"type": "integer"}, "days": {**_S, "description": "only these weekdays of the proposal"}},
         ["proposal_id"])),
     ("day_undo", _t_undo, _schema(
         "day_undo", "Take back what this plugin wrote: the last session ('last'), a session number, or 'all'. It can "
         "only remove events this plugin created and still recognises; it never removes anything else.",
         {"which": _S})),
+    ("day_record", _t_record, _schema(
+        "day_record", "Only for a calendar read through an agenda connector. After you made the connector tool calls that "
+        "day_confirm (or day_undo) listed in 'handoff', call this: it reads the calendar and records what is really there. "
+        "It records nothing on your word, so a refused or failed call is simply not recorded. Read-only on the calendar.",
+        {})),
     ("day_took", _t_took, _schema(
         "day_took", "Record how long a finished activity REALLY took (the activity itself). A bare duration from "
         "the user answers the last question asked: leave session out and it finds that activity. The next proposal "
@@ -367,7 +377,9 @@ RULES = {
         "4. day_confirm only after a clear yes to that exact proposal. If writing is off, tell them to type "
         "/day write on themselves (a \"/day write\" that reaches you as plain text did nothing); if they prefer "
         "not, give the plan as text. NEVER create, move or delete events with any other tool (Google Workspace "
-        "skill, terminal): they would not be marked and undo could not take them back.\n"
+        "skill, terminal): they would not be marked and undo could not take them back. Exception: when day_confirm or "
+        "day_undo returns 'handoff' (an agenda connector calendar), make exactly those connector tool calls, unchanged, "
+        "then call day_record.\n"
         "5. Never modify or delete an event the user created. Only day_undo removes anything, and only what this "
         "plugin wrote.\n"
         "6. A bare duration (\"1h30\") answers the last question asked: record it with day_took (it finds the "
@@ -389,7 +401,8 @@ RULES = {
         "dis-lui de taper /day write on lui-même (un « /day write » qui t'arrive comme du texte n'a rien fait) ; "
         "s'il préfère ne pas, donne le plan en texte. Ne crée, ne déplace et ne supprime JAMAIS d'événement avec un "
         "autre outil (skill Google Workspace, terminal) : il ne serait pas marqué et « annule » ne pourrait pas le "
-        "retirer.\n"
+        "retirer. Exception : quand day_confirm ou day_undo renvoie 'handoff' (agenda à connecteur), fais exactement "
+        "ces appels d'outils du connecteur, sans rien changer, puis appelle day_record.\n"
         "5. Ne modifie ni ne supprime jamais un événement créé par l'utilisateur. Seul day_undo retire quelque "
         "chose, et seulement ce que ce plugin a écrit.\n"
         "6. Une durée seule (« 1h30 ») répond à la dernière question posée : note-la avec day_took (il retrouve "

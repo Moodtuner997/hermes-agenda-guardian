@@ -92,7 +92,7 @@ EN = {
                     "call day_record. If the user refuses one, stop and say so.",
     "confirm_handoff_line": "Staged #{group}: {kind}, {day} {date} {block} ({n} event(s)).",
     "status_handoff": "staged",
-    "undo_handoff_head": "Removal staged, nothing is removed yet. Call agenda_supprimer once per item of 'handoff' with exactly "
+    "undo_handoff_head": "Removal staged, nothing is removed yet. Call the tool named in each item of 'handoff' (the connector's delete tool) with exactly "
                          "these arguments (the user accepts each one), then call day_record. Items:",
     "record_none": "Nothing waits to be recorded.",
     "record_needs_connector": "day_record only exists for an agenda connector calendar (calendar=connector:<program>).",
@@ -250,7 +250,7 @@ FR = {
                     "appareil), puis appelle day_record. S'il en refuse un, arrête-toi et dis-le.",
     "confirm_handoff_line": "Préparé n°{group} : {kind}, {day} {date} {block} ({n} événement(s)).",
     "status_handoff": "préparée",
-    "undo_handoff_head": "Retrait préparé, rien n'est encore retiré. Appelle agenda_supprimer une fois par élément de 'handoff' "
+    "undo_handoff_head": "Retrait préparé, rien n'est encore retiré. Appelle l'outil nommé dans chaque élément de 'handoff' (l'outil de suppression du connecteur) "
                          "avec exactement ces arguments (l'utilisateur accepte chacun), puis appelle day_record. Éléments :",
     "record_none": "Rien n'attend d'être enregistré.",
     "record_needs_connector": "day_record n'existe que pour un agenda à connecteur (calendar=connector:<programme>).",

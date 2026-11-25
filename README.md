@@ -359,8 +359,18 @@ MIT licence.
 ## Calendars written through a connector
 
 With `calendar=connector:<program>` the plugin reads like `cmd:` but never writes: `day_confirm` writes nothing and returns
-`handoff`, the exact `agenda_creer` calls (title, start, end, description carrying the plugin marker) for the agent to make
+`handoff`, the exact `create_event` calls (title, start, end, description carrying the plugin marker) for the agent to make
 with its own connector tool, where you accept each one. `day_record` then re-reads the calendar and records only events that
 carry the marker with the same times; a refused or failed call is simply not recorded, and a staged call older than a day is
-set aside. `day_undo` stages `agenda_supprimer` calls the same way, and an event counts as removed only once it is gone from the
+set aside. `day_undo` stages `delete_event` calls the same way, and an event counts as removed only once it is gone from the
 calendar. A program that fails is an error, never an empty day. Writing stays off until you type `/day write on`.
+
+The agent is told to call a create tool and a delete tool with neutral names (`create_event(title, start, end, description)`,
+`delete_event(id)`). Rename them to your connector's tools and argument names, typed by you (an assistant cannot set it):
+
+```
+/day set "connector_tools=create=my_create(title=name,start=from,end=to,description=notes);remove=my_delete(id=event[,notify=guests])"
+```
+
+`notify`, when mapped, is always passed as `false`. `connector_tools=none` restores the defaults.
+

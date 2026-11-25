@@ -436,9 +436,10 @@ class AgendaMixin:
                     store.add_handoff(self.conn, {"op": "create", "group_id": group, "proposal_id": proposal_id, "kind": name,
                                                   "part": part, "summary": summary, "start": start.isoformat(),
                                                   "end": end.isoformat(), "description": description}, now)
-                    calls.append({"tool": "agenda_creer", "arguments": {
-                        "titre": summary, "debut": sources._aware(start, profile.get("timezone", "")).isoformat(),
-                        "fin": sources._aware(end, profile.get("timezone", "")).isoformat(), "description": description}})
+                    spec = prof.connector_tools(profile)["create"]
+                    values = {"title": summary, "start": sources._aware(start, profile.get("timezone", "")).isoformat(),
+                              "end": sources._aware(end, profile.get("timezone", "")).isoformat(), "description": description}
+                    calls.append({"tool": spec["tool"], "arguments": {spec["args"][k]: v for k, v in values.items()}})
                     made.append({"part": part, "summary": summary, "link": ""})
                     continue
                 try:
@@ -518,13 +519,14 @@ class AgendaMixin:
     def _undo_handoff(self, rows: list[dict], now: datetime, lang: str) -> dict:
         """Connector calendar: the removals are the agent's connector tool calls (the user accepts each), recorded by day_record."""
         waiting = {r["event_id"] for r in store.pending_handoff(self.conn) if r["op"] == "remove"}
-        calls = []
+        calls, spec = [], prof.connector_tools(self.profile())["remove"]
         for row in rows:
             if row["event_id"] not in waiting:
                 store.add_handoff(self.conn, {"op": "remove", "group_id": row["group_id"], "event_id": row["event_id"],
                                               "kind": row["kind"], "part": row["part"], "summary": row["summary"],
                                               "start": row["start"], "end": row["end"]}, now)
-            calls.append({"tool": "agenda_supprimer", "arguments": {"evenement": row["event_id"], "prevenir": False}})
+            values = {"id": row["event_id"], "notify": False}
+            calls.append({"tool": spec["tool"], "arguments": {spec["args"][k]: v for k, v in values.items() if k in spec["args"]}})
         listing = "\n".join(f"- {r['summary']} ({r['start'][:16].replace('T', ' ')})" for r in rows)
         return {"ok": True, "handoff": calls, "removed": [], "text": tr(lang, "undo_handoff_head") + "\n" + listing}
 

@@ -41,7 +41,7 @@ class FakeConnector:
     def agent_creates(self, call, **override):
         """What the connector does when the user accepts the staged call."""
         a = call["arguments"]
-        return self.add(override.get("titre", a["titre"]), override.get("debut", a["debut"]), override.get("fin", a["fin"]),
+        return self.add(override.get("title", a["title"]), override.get("start", a["start"]), override.get("end", a["end"]),
                         override.get("description", a["description"]))
 
     def agent_deletes(self, event_id):
@@ -86,9 +86,9 @@ def test_the_plan_is_read_through_the_program(world):
 def test_confirm_writes_nothing_itself_and_stages_the_exact_calls(world):
     done = staged(world, 2)
     assert done["ok"] and world.program.writes() == []
-    assert done["handoff"] and [c["tool"] for c in done["handoff"]] == ["agenda_creer"] * len(done["handoff"])
+    assert done["handoff"] and [c["tool"] for c in done["handoff"]] == ["create_event"] * len(done["handoff"])
     call = done["handoff"][0]["arguments"]
-    assert set(call) == {"titre", "debut", "fin", "description"} and call["description"].startswith("[agenda-guardian:")
+    assert set(call) == {"title", "start", "end", "description"} and call["description"].startswith("[agenda-guardian:")
     assert "STAGED, NOTHING IS WRITTEN YET" in done["text"]
     assert store.written(world.g.conn) == []
     assert store.get_proposal(world.g.conn, 1)["status"] == "handoff"
@@ -113,10 +113,10 @@ def test_record_writes_down_what_the_calendar_shows(world):
 def test_record_ignores_an_event_with_the_wrong_times_or_no_marker(world):
     done = staged(world)
     call = done["handoff"][0]
-    later = (datetime.fromisoformat(call["arguments"]["debut"]) + timedelta(hours=1)).isoformat()
-    world.program.agent_creates(call, debut=later)
+    later = (datetime.fromisoformat(call["arguments"]["start"]) + timedelta(hours=1)).isoformat()
+    world.program.agent_creates(call, start=later)
     world.program.agent_creates(call, description="no marker")
-    world.program.add("Mine", call["arguments"]["debut"], call["arguments"]["fin"])
+    world.program.add("Mine", call["arguments"]["start"], call["arguments"]["end"])
     world.program.agent_creates(call, description="[agenda-guardian:99:main] other group")
     result = world.g.record()
     assert result["recorded"] == [] and store.written(world.g.conn) == []
@@ -141,9 +141,9 @@ def test_undo_stages_removals_and_record_confirms_them_only_once_gone(world):
     ids = [world.program.agent_creates(c) for c in done["handoff"]]
     world.g.record()
     undo = world.g.undo()
-    assert [c["tool"] for c in undo["handoff"]] == ["agenda_supprimer"] * len(ids)
-    assert {c["arguments"]["evenement"] for c in undo["handoff"]} == set(ids)
-    assert all(c["arguments"]["prevenir"] is False for c in undo["handoff"]) and world.program.writes() == []
+    assert [c["tool"] for c in undo["handoff"]] == ["delete_event"] * len(ids)
+    assert {c["arguments"]["id"] for c in undo["handoff"]} == set(ids)
+    assert all(set(c["arguments"]) == {"id"} for c in undo["handoff"]) and world.program.writes() == []
     again = world.g.undo()
     assert len(again["handoff"]) == len(ids) and len(store.pending_handoff(world.g.conn)) == len(ids)
     still = world.g.record()
@@ -188,3 +188,45 @@ def test_day_record_is_a_tool_and_a_command_and_only_for_a_connector_calendar(wo
 def test_the_rules_for_the_agent_name_the_exception_and_day_record():
     for lang in ("en", "fr"):
         assert "day_record" in ag.RULES[lang] and "handoff" in ag.RULES[lang]
+
+
+MAPPED = ("connector_tools=create=my_create(title=name,start=from_,end=to_,description=description);"
+          "remove=my_delete(id=event,notify=guests)")
+
+
+def test_the_user_can_rename_the_connector_tools_and_arguments(world):
+    world.g.set_rules([tuple(MAPPED.split("=", 1))])
+    done = staged(world)
+    call = done["handoff"][0]
+    assert call["tool"] == "my_create" and set(call["arguments"]) == {"name", "from_", "to_", "description"}
+    ids = [world.program.agent_creates({"arguments": {"title": c["arguments"]["name"], "start": c["arguments"]["from_"],
+                                                       "end": c["arguments"]["to_"], "description": c["arguments"]["description"]}})
+           for c in done["handoff"]]
+    world.g.record()
+    undo = world.g.undo()
+    assert {c["tool"] for c in undo["handoff"]} == {"my_delete"}
+    assert {c["arguments"]["event"] for c in undo["handoff"]} == set(ids)
+    assert all(c["arguments"]["guests"] is False for c in undo["handoff"])
+
+
+@pytest.mark.parametrize("bad", [
+    "create=x(title=a,start=b,end=c)", "create=x(title=a,start=b,end=c,description=d)", "remove=y(id=e)",
+    "create=x y(title=a,start=b,end=c,description=d);remove=y(id=e)",
+    "create=x(title=a,start=b,end=c,description=d,extra=z);remove=y(id=e)",
+    "create=x(title=a b,start=b,end=c,description=d);remove=y(id=e)",
+])
+def test_bad_tool_maps_are_refused_and_the_old_one_stays(world, bad):
+    world.g.set_rules([("connector_tools", "create=ok(title=a,start=b,end=c,description=d);remove=ok2(id=e)")])
+    assert "connector_tools reads" in world.g.set_rules([("connector_tools", bad)])
+    assert world.g.profile()["connector_tools"]["create"]["tool"] == "ok"
+
+
+def test_no_tool_can_rename_the_connector_tools_and_none_restores_the_defaults(world, monkeypatch):
+    monkeypatch.setattr(ag, "_guardian", lambda **kw: world.g)
+    ctx = Ctx()
+    ag.register(ctx)
+    answer = json.loads(ctx.tools["day_setup"]({"settings": {"connector_tools": "create=evil(title=a,start=b,end=c,description=d);remove=e(id=f)"}}))
+    assert "refused" in answer["result"] and "connector_tools" not in world.g.profile() or not world.g.profile().get("connector_tools")
+    world.g.set_rules([tuple(MAPPED.split("=", 1))])
+    world.g.set_rules([("connector_tools", "none")])
+    assert staged(world)["handoff"][0]["tool"] == "create_event"

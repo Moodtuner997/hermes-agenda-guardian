@@ -34,7 +34,16 @@ _DAYS = {"mon": 1, "tue": 2, "wed": 3, "thu": 4, "fri": 5, "sat": 6, "sun": 7,
 _INT_BOUNDS = {"buffer_min": (0, 60), "max_block_min": (15, 120), "break_min": (0, 30), "max_tasks_per_day": (1, 10)}
 
 KEYS = ("language", "timezone", "work_hours", "workdays", "protected", "focus", "buffer_min", "max_block_min",
-        "break_min", "max_tasks_per_day", "calendar", "category")
+        "break_min", "max_tasks_per_day", "calendar", "category", "connector_tools")
+
+# What the agent is told to call for a ``connector:`` calendar, and with which argument names. The defaults are neutral;
+# ``connector_tools`` renames them to the tools of the connector you actually use (see the README).
+DEFAULT_CONNECTOR_TOOLS = {
+    "create": {"tool": "create_event", "args": {"title": "title", "start": "start", "end": "end", "description": "description"}},
+    "remove": {"tool": "delete_event", "args": {"id": "id"}},
+}
+_TOOL_PARTS = {"create": ("title", "start", "end", "description"), "remove": ("id", "notify")}
+_TOOL_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,63}$")
 
 
 def new_profile() -> dict:
@@ -92,6 +101,38 @@ def _one_day(token: str, lang: str = "en") -> int:
     raise ValueError(tr(lang, "bad_weekday", text=token))
 
 
+def connector_tools(profile: dict) -> dict:
+    """The tool and argument names for the connector calendar (the neutral defaults unless the user renamed them)."""
+    return profile.get("connector_tools") or DEFAULT_CONNECTOR_TOOLS
+
+
+def _connector_tools(text: str, lang: str = "en") -> dict:
+    """``create=<tool>(title=a,start=b,end=c,description=d);remove=<tool>(id=e[,notify=f])``; ``none`` restores the defaults.
+    ``remove`` with ``notify`` passes ``false`` there: this plugin never asks the connector to notify guests."""
+    text = text.strip()
+    if text.lower() in ("none", "default", ""):
+        return {}
+    out = {}
+    for chunk in text.split(";"):
+        action, sep, rest = chunk.strip().partition("=")
+        tool, paren, args = rest.partition("(")
+        if not sep or action not in _TOOL_PARTS or not paren or not args.endswith(")") or not _TOOL_NAME.match(tool.strip()):
+            raise ValueError(tr(lang, "bad_connector_tools"))
+        mapping = {}
+        for pair in args[:-1].split(","):
+            part, eq, name = pair.strip().partition("=")
+            if not eq or part not in _TOOL_PARTS[action] or not _TOOL_NAME.match(name.strip()):
+                raise ValueError(tr(lang, "bad_connector_tools"))
+            mapping[part] = name.strip()
+        required = _TOOL_PARTS[action][:-1] if action == "remove" else _TOOL_PARTS[action]
+        if any(part not in mapping for part in required):
+            raise ValueError(tr(lang, "bad_connector_tools"))
+        out[action] = {"tool": tool.strip(), "args": mapping}
+    if set(out) != {"create", "remove"}:
+        raise ValueError(tr(lang, "bad_connector_tools"))
+    return out
+
+
 def _calendar(text: str, lang: str = "en") -> dict:
     text = text.strip()
     if text in ("none", "off", ""):
@@ -131,6 +172,8 @@ def apply_setting(profile: dict, key: str, value: str, today: date, *, from_tool
     lang = profile.get("language", "en")
     if from_tool and key == "calendar":
         raise ValueError(tr(lang, "calendar_user_only"))
+    if from_tool and key == "connector_tools":
+        raise ValueError(tr(lang, "connector_tools_user_only"))
     if key == "language":
         if value not in ("en", "fr"):
             raise ValueError(tr(lang, "language_values"))
@@ -176,6 +219,8 @@ def apply_setting(profile: dict, key: str, value: str, today: date, *, from_tool
         profile[key] = number
     elif key == "calendar":
         profile["calendar"] = _calendar(value, lang)
+    elif key == "connector_tools":
+        profile["connector_tools"] = _connector_tools(value, lang)
     elif key == "category":
         name, sep, minutes = value.partition(":")
         name = name.strip().lower()

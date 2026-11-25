@@ -33,6 +33,10 @@ EN = {
     "set_nothing": "Nothing to set. Example: /day set work_hours=09:00-17:30",
     "set_ok": "ok  {line}",
     "set_refused": "refused  {key}: {why}",
+    "bad_connector_tools": "connector_tools reads create=<tool>(title=<arg>,start=<arg>,end=<arg>,description=<arg>);"
+                           "remove=<tool>(id=<arg>[,notify=<arg>]), or none for the defaults",
+    "connector_tools_user_only": "the connector tool names are yours to set, an assistant cannot: type /day set "
+                                 "connector_tools=... yourself",
     "calendar_user_only": "the calendar source is yours to choose, an assistant cannot set it: type /day set "
                           "calendar=<google, ics:<https URL or file>, file:<json file>, cmd:<program>, or none> "
                           "yourself",
@@ -216,6 +220,10 @@ FR = {
     "set_nothing": "Rien à régler. Exemple : /day set work_hours=09:00-17:30",
     "set_ok": "ok  {line}",
     "set_refused": "refusé  {key} : {why}",
+    "bad_connector_tools": "connector_tools se lit create=<outil>(title=<arg>,start=<arg>,end=<arg>,description=<arg>);"
+                           "remove=<outil>(id=<arg>[,notify=<arg>]), ou none pour les valeurs par défaut",
+    "connector_tools_user_only": "les noms d'outils du connecteur, c'est toi qui les fixes, un assistant ne peut pas : tape "
+                                 "/day set connector_tools=... toi-même",
     "calendar_user_only": "la source d'agenda, c'est toi qui la choisis, un assistant ne peut pas la régler : tape "
                           "toi-même /day set calendar=<google, ics:<URL https ou fichier>, file:<fichier json>, "
                           "cmd:<programme>, ou none>",

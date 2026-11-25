@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-import shlex
 
 from .core import Guardian, UserError, parse_day, parse_minutes
 from .profile import normal_key
@@ -15,7 +14,7 @@ _DURATION = re.compile(r"^\d+(h(\d+)?|m|min)?$|^\d+h\d*m?$", re.I)
 # (a sentence, a fragment, or a syntax nobody should have to learn): the gateway hook hands it to the agent.
 # One exception, see ``sets_calendar``: the commands that fix the calendar source are answered by the dispatcher too.
 DIRECT = frozenset({"help", "list", "ls", "tasks", "plan", "now", "brief", "nudge", "ok", "confirm", "undo", "write",
-                    "cron"})
+                    "cron", "record"})
 KNOWN = DIRECT | frozenset({"setup", "set", "add", "done", "drop", "rm", "kind", "habit", "propose", "took"})
 
 
@@ -27,12 +26,48 @@ def free_text(raw: str) -> str:
     return " ".join(words)
 
 
+def _split_words(raw: str) -> list[str]:
+    """Split on spaces outside quotes, keeping every character (no escapes, so a Windows path keeps its backslashes).
+    A quote opens a quoted part only at the start of a word or right after ``=`` (``calendar="cmd:prog arg"``); an
+    apostrophe inside a word ("don't") stays a letter. An open quote that never closes is an error."""
+    words, current, quote = [], "", ""
+    for char in raw:
+        if quote:
+            current += char
+            if char == quote:
+                quote = ""
+        elif char in "\"'" and (not current or current[-1] == "="):
+            quote = char
+            current += char
+        elif char.isspace():
+            if current:
+                words.append(current)
+            current = ""
+        else:
+            current += char
+    if quote:
+        raise ValueError("No closing quotation")
+    if current:
+        words.append(current)
+    return words
+
+
+def _unquote(token: str) -> str:
+    """``"a b"`` -> ``a b`` and ``key="a b"`` -> ``key=a b`` (same quote on both ends)."""
+    if len(token) >= 2 and token[0] == token[-1] and token[0] in "\"'":
+        return token[1:-1]
+    key, sep, value = token.partition("=")
+    if sep and key and len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'" and not any(c in key for c in "\"'"):
+        return f"{key}={value[1:-1]}"
+    return token
+
+
 def _tokens(raw: str, lang: str) -> list[str]:
     try:
-        tokens = shlex.split(raw, posix=False)
+        tokens = _split_words(raw)
     except ValueError as exc:
         raise UserError(tr(lang, "quote", why=exc))
-    return [t[1:-1] if len(t) >= 2 and t[0] == t[-1] and t[0] in "\"'" else t for t in tokens]
+    return [_unquote(t) for t in tokens]
 
 
 def sets_calendar(raw: str) -> bool:
@@ -182,6 +217,8 @@ def run(guardian: Guardian, raw: str) -> str:
             return guardian.confirm(int(plain[0].lstrip("#")), named.get("days", ""))["text"]
         if command == "undo":
             return guardian.undo(args[0] if args else "last")["text"]
+        if command == "record":
+            return guardian.record()["text"]
         if command == "took":
             if len(args) < 2:
                 raise UserError(tr(lang, "took_usage"))

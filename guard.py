@@ -79,7 +79,7 @@ def scan(plain: str) -> tuple[str, list[tuple[int, int]]] | None:
         if hits:
             return "calendar", hits
     code = list(_CODE.finditer(plain))
-    if code and ("calendar" in low or any(h.group().lower() in ("setup_auto", "agenda_guardian") for h in code)):
+    if code and ("calendar" in low or "connector_tools" in low or any(h.group().lower() in ("setup_auto", "agenda_guardian") for h in code)):
         return "code", [h.span() for h in code]
     home = [h.span() for h in _HOME.finditer(plain)]
     return ("storage", home) if home else None

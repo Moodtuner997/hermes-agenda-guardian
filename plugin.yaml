@@ -32,6 +32,7 @@ provides_tools:
   - day_propose
   - day_confirm
   - day_undo
+  - day_record
   - day_took
   - day_week
   - day_week_plan

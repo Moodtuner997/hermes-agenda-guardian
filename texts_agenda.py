@@ -86,7 +86,21 @@ EN = {
     "n_usual_free": "This day is usually taken ({taken} of {weeks} weeks) but free in your calendar this week: tell me "
                     "if something is planned that is not in it.",
     # --- writing ---
-    "write_needs_google": "Writing is only possible on a Google calendar (calendar=google).",
+    "write_needs_google": "Writing is only possible on a Google calendar (calendar=google) or an agenda connector (calendar=connector:<program>).",
+    "handoff_head": "STAGED, NOTHING IS WRITTEN YET. Call the agenda connector tool named in each item of 'handoff', one call per "
+                    "item, with exactly these arguments and no change (the user accepts each one on their own device), then "
+                    "call day_record. If the user refuses one, stop and say so.",
+    "confirm_handoff_line": "Staged #{group}: {kind}, {day} {date} {block} ({n} event(s)).",
+    "status_handoff": "staged",
+    "undo_handoff_head": "Removal staged, nothing is removed yet. Call the tool named in each item of 'handoff' (the connector's delete tool) with exactly "
+                         "these arguments (the user accepts each one), then call day_record. Items:",
+    "record_none": "Nothing waits to be recorded.",
+    "record_no_id": "The calendar program printed an event without an id: nothing was recorded.",
+    "record_needs_connector": "day_record only exists for an agenda connector calendar (calendar=connector:<program>).",
+    "record_unreadable": "I could not read your calendar ({why}): nothing was recorded.",
+    "record_created": "{summary} ({start}): it is in your calendar, recorded.",
+    "record_waiting": "{n} item(s) not seen in your calendar yet (not accepted, or not done): nothing is recorded for them.",
+    "record_lapsed": "{n} item(s) are more than a day old and still not in your calendar: set aside.",
     "write_on": "Writing is on. I will still show every proposal first and write only after your yes. "
                 "Only events I create can ever be removed by me: say 'undo'.",
     "write_off": "Writing is off. I only read your calendar.",
@@ -231,7 +245,21 @@ FR = {
     "n_usual_free": "Ce jour est d'habitude pris ({taken} semaines sur {weeks}) mais libre dans ton agenda cette "
                     "semaine : dis-moi s'il y a quelque chose de prévu qui n'y figure pas.",
     # --- écriture ---
-    "write_needs_google": "L'écriture n'est possible que sur un agenda Google (calendar=google).",
+    "write_needs_google": "L'écriture n'est possible que sur un agenda Google (calendar=google) ou un connecteur d'agenda (calendar=connector:<programme>).",
+    "handoff_head": "PRÉPARÉ, RIEN N'EST ÉCRIT. Appelle l'outil du connecteur d'agenda nommé dans chaque élément de 'handoff', un "
+                    "appel par élément, avec exactement ces arguments et sans rien changer (l'utilisateur accepte chacun sur son "
+                    "appareil), puis appelle day_record. S'il en refuse un, arrête-toi et dis-le.",
+    "confirm_handoff_line": "Préparé n°{group} : {kind}, {day} {date} {block} ({n} événement(s)).",
+    "status_handoff": "préparée",
+    "undo_handoff_head": "Retrait préparé, rien n'est encore retiré. Appelle l'outil nommé dans chaque élément de 'handoff' (l'outil de suppression du connecteur) "
+                         "avec exactement ces arguments (l'utilisateur accepte chacun), puis appelle day_record. Éléments :",
+    "record_none": "Rien n'attend d'être enregistré.",
+    "record_no_id": "Le programme d'agenda a affiché un événement sans identifiant : rien n'est enregistré.",
+    "record_needs_connector": "day_record n'existe que pour un agenda à connecteur (calendar=connector:<programme>).",
+    "record_unreadable": "Je n'ai pas pu lire ton agenda ({why}) : rien n'est enregistré.",
+    "record_created": "{summary} ({start}) : il est dans ton agenda, enregistré.",
+    "record_waiting": "{n} élément(s) pas encore vus dans ton agenda (refusés, ou pas faits) : rien n'est enregistré pour eux.",
+    "record_lapsed": "{n} élément(s) datent de plus d'un jour et ne sont toujours pas dans ton agenda : écartés.",
     "write_on": "L'écriture est activée. Je te montre toujours la proposition d'abord et je n'écris qu'après ton oui. "
                 "Je ne peux retirer que ce que j'ai écrit moi-même : dis « annule ».",
     "write_off": "L'écriture est désactivée. Je lis seulement ton agenda.",

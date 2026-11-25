@@ -20,7 +20,7 @@ EN = {
     "int_needed": "{key} must be a whole number between {low} and {high}",
     "int_range": "{key} must be between {low} and {high}",
     "bad_calendar": "calendar must be none, google, ics:<file or https URL>, file:<json file> or "
-                    "cmd:<program that prints event JSON; {{start}} and {{end}} are filled in>",
+                    "cmd:<program that prints event JSON; {{start}} and {{end}} are filled in> or connector:<same, written by your own agent tools>",
     "cmd_needs": "cmd: needs a program to run",
     "category_form": "category looks like admin:20 (typical minutes) or admin:none to remove it",
     "category_whole": "category minutes must be a whole number",
@@ -33,6 +33,10 @@ EN = {
     "set_nothing": "Nothing to set. Example: /day set work_hours=09:00-17:30",
     "set_ok": "ok  {line}",
     "set_refused": "refused  {key}: {why}",
+    "bad_connector_tools": "connector_tools reads create=<tool>(title=<arg>,start=<arg>,end=<arg>,description=<arg>);"
+                           "remove=<tool>(id=<arg>[,notify=<arg>]), or none for the defaults",
+    "connector_tools_user_only": "the connector tool names are yours to set, an assistant cannot: type /day set "
+                                 "connector_tools=... yourself",
     "calendar_user_only": "the calendar source is yours to choose, an assistant cannot set it: type /day set "
                           "calendar=<google, ics:<https URL or file>, file:<json file>, cmd:<program>, or none> "
                           "yourself",
@@ -204,7 +208,7 @@ FR = {
     "int_needed": "{key} doit être un nombre entier entre {low} et {high}",
     "int_range": "{key} doit être compris entre {low} et {high}",
     "bad_calendar": "calendar vaut none, google, ics:<fichier ou URL https>, file:<fichier json> ou "
-                    "cmd:<programme qui affiche des événements en JSON ; {{start}} et {{end}} sont remplis>",
+                    "cmd:<programme qui affiche des événements en JSON ; {{start}} et {{end}} sont remplis> ou connector:<idem, écrit par tes propres outils d'agent>",
     "cmd_needs": "cmd: demande un programme à lancer",
     "category_form": "category s'écrit admin:20 (minutes habituelles) ou admin:none pour la retirer",
     "category_whole": "les minutes d'une catégorie sont un nombre entier",
@@ -216,6 +220,10 @@ FR = {
     "set_nothing": "Rien à régler. Exemple : /day set work_hours=09:00-17:30",
     "set_ok": "ok  {line}",
     "set_refused": "refusé  {key} : {why}",
+    "bad_connector_tools": "connector_tools se lit create=<outil>(title=<arg>,start=<arg>,end=<arg>,description=<arg>);"
+                           "remove=<outil>(id=<arg>[,notify=<arg>]), ou none pour les valeurs par défaut",
+    "connector_tools_user_only": "les noms d'outils du connecteur, c'est toi qui les fixes, un assistant ne peut pas : tape "
+                                 "/day set connector_tools=... toi-même",
     "calendar_user_only": "la source d'agenda, c'est toi qui la choisis, un assistant ne peut pas la régler : tape "
                           "toi-même /day set calendar=<google, ics:<URL https ou fichier>, file:<fichier json>, "
                           "cmd:<programme>, ou none>",
